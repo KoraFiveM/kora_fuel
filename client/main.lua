@@ -68,14 +68,13 @@ local function serviceVehicle(vehicle, account)
     if not DoesEntityExist(vehicle) then return notify('That vehicle is no longer available.', 'error') end
     if GetIsVehicleEngineRunning(vehicle) then return notify('Switch the engine off before servicing the vehicle.', 'error') end
 
-    local electric = isElectricVehicle(vehicle)
-    local level = currentLevel(vehicle)
-    local missing = Config.maxLevel - level
-    if missing < 0.5 then
-        return notify(electric and 'Battery is already fully charged.' or 'Fuel tank is already full.', 'inform')
+    local netId = NetworkGetNetworkIdFromEntity(vehicle)
+    local session = QB.callback.trigger('qbfuel:beginService', netId, account)
+    if not session or not session.ok then
+        return notify(session and session.message or 'Service could not be authorised.', 'error')
     end
 
-    local label = electric and 'Charging vehicle' or 'Refuelling vehicle'
+    local label = session.electric and 'Charging vehicle' or 'Refuelling vehicle'
     local ped = PlayerPedId()
     TaskTurnPedToFaceEntity(ped, vehicle, 750)
     Wait(750)
@@ -84,22 +83,18 @@ local function serviceVehicle(vehicle, account)
 
     local completed = QB.progressbar.start({
         label = label,
-        duration = math.max(Config.minimumProgressMs, math.floor(missing * Config.progressMsPerUnit)),
+        duration = session.duration,
         canCancel = true,
         disable = { move = true, combat = true },
         anim = SERVICE_ANIMATION,
         props = { FUEL_NOZZLE },
     })
-    if not completed then return notify(label .. ' cancelled.', 'inform') end
+    if not completed then
+        TriggerServerEvent('qbfuel:server:cancelService', session.token)
+        return notify(label .. ' cancelled.', 'inform')
+    end
 
-    -- Fuel-level natives are client-only, so include the latest observed level
-    -- for the server to validate and use when calculating the payment.
-    TriggerServerEvent(
-        'qbfuel:server:serviceVehicle',
-        NetworkGetNetworkIdFromEntity(vehicle),
-        account,
-        currentLevel(vehicle)
-    )
+    TriggerServerEvent('qbfuel:server:serviceVehicle', session.token)
 end
 
 local function openPaymentMenu()
@@ -133,8 +128,9 @@ RegisterNetEvent('qbfuel:client:serviceResult', function(ok, message, level, net
     if ok then
         local vehicle = type(netId) == 'number' and NetworkGetEntityFromNetworkId(netId) or 0
         if type(level) == 'number' and vehicle ~= 0 and DoesEntityExist(vehicle) then
-            local controlled = QB.vehicle.requestControl(vehicle, 2000)
-            if controlled then SetVehicleFuelLevel(vehicle, Fuel.clampLevel(level) + 0.0) end
+            if NetworkHasControlOfEntity(vehicle) then
+                SetVehicleFuelLevel(vehicle, Fuel.clampLevel(level) + 0.0)
+            end
         end
         notify(message, 'success')
         return

@@ -14,36 +14,103 @@ local function sendResult(src, ok, message, level, netId)
     TriggerClientEvent('qbfuel:client:serviceResult', src, ok, message, level, netId)
 end
 
-RegisterNetEvent('qbfuel:server:serviceVehicle', function(netId, account, level)
-    local src = source
-    if type(netId) ~= 'number' or netId < 1 or not Fuel.isPaymentAccount(account)
-        or type(level) ~= 'number' or level ~= level or level < 0 or level > Config.maxLevel then
-        return sendResult(src, false, 'Invalid service request.')
+local sessions = {}
+
+math.randomseed(GetGameTimer() + math.floor(os.clock() * 1000000))
+
+local function token()
+    local chars, result = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', {}
+    for i = 1, 32 do
+        local index = math.random(1, #chars)
+        result[i] = chars:sub(index, index)
     end
+    return table.concat(result)
+end
+
+local function vehicleFor(src, netId)
+    if type(netId) ~= 'number' or netId < 1 then return nil, 'Invalid service request.' end
 
     local vehicle = NetworkGetEntityFromNetworkId(netId)
     local ped = GetPlayerPed(src)
     if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) or GetEntityType(vehicle) ~= 2
         or not ped or ped == 0 or not DoesEntityExist(ped) then
-        return sendResult(src, false, 'Vehicle is no longer available.')
+        return nil, 'Vehicle is no longer available.'
     end
 
     local playerCoords, vehicleCoords = GetEntityCoords(ped), GetEntityCoords(vehicle)
     if distance(playerCoords, vehicleCoords) > Config.vehicleSearchDistance + 1.0 or not nearServicePoint(playerCoords) then
-        return sendResult(src, false, 'Move closer to the service point and vehicle.')
+        return nil, 'Move closer to the service point and vehicle.'
     end
-    if GetIsVehicleEngineRunning(vehicle) then return sendResult(src, false, 'Switch the engine off before servicing.') end
+    if GetPlayerRoutingBucket(src) ~= GetEntityRoutingBucket(vehicle) then return nil, 'Vehicle is in another instance.' end
+    if GetIsVehicleEngineRunning(vehicle) then return nil, 'Switch the engine off before servicing.' end
+    return vehicle
+end
 
-    level = Fuel.clampLevel(level)
+local function serverLevel(vehicle)
+    if type(GetVehicleFuelLevel) ~= 'function' then return nil end
+    local level = tonumber(GetVehicleFuelLevel(vehicle))
+    if not QB.util.isFiniteNumber(level) then return nil end
+    return Fuel.clampLevel(level)
+end
+
+QB.callback.register('qbfuel:beginService', function(src, netId, account)
+    if not Fuel.isPaymentAccount(account) then return { ok = false, message = 'Invalid payment account.' } end
+    local vehicle, vehicleErr = vehicleFor(src, netId)
+    if not vehicle then return { ok = false, message = vehicleErr } end
+
+    local level = serverLevel(vehicle)
+    if not level then return { ok = false, message = 'Fuel state is unavailable.' } end
+
+    local missing = Config.maxLevel - level
+    if missing < 0.5 then return { ok = false, message = 'Vehicle is already full.' } end
+
+    local electric = Fuel.isElectricModel(GetEntityModel(vehicle))
+    local duration = math.max(Config.minimumProgressMs, math.floor(missing * Config.progressMsPerUnit))
+    local current = GetGameTimer()
+    local id = token()
+    sessions[src] = {
+        token = id,
+        netId = netId,
+        account = account,
+        electric = electric,
+        readyAt = current + duration,
+        expiresAt = current + duration + Config.serviceSessionGraceMs,
+    }
+    return { ok = true, token = id, duration = duration, electric = electric }
+end, { rateLimit = Config.serviceRateLimit })
+
+RegisterNetEvent('qbfuel:server:serviceVehicle', function(serviceToken)
+    local src = source
+    local session = sessions[src]
+    if not session or type(serviceToken) ~= 'string' or session.token ~= serviceToken then
+        return sendResult(src, false, 'Invalid or expired service session.')
+    end
+    local current = GetGameTimer()
+    if current < session.readyAt then return sendResult(src, false, 'Finish servicing the vehicle first.') end
+    sessions[src] = nil
+    if current > session.expiresAt then return sendResult(src, false, 'Service session expired.') end
+
+    local vehicle, vehicleErr = vehicleFor(src, session.netId)
+    if not vehicle then return sendResult(src, false, vehicleErr) end
+    local level = serverLevel(vehicle)
+    if not level then return sendResult(src, false, 'Fuel state is unavailable.') end
     local missing = Config.maxLevel - level
     if missing < 0.5 then return sendResult(src, false, 'Vehicle is already full.') end
 
-    local electric = Fuel.isElectricModel(GetEntityModel(vehicle))
-    local kind = electric and 'charge' or 'fuel'
+    local kind = session.electric and 'charge' or 'fuel'
     local price = math.ceil(missing * Config.pricePerUnit[kind])
-    local paid, err = exports.qbcore:removeMoney(src, account, price, ('%s vehicle %s'):format(kind, netId))
+    local paid, err = exports.qbcore:removeMoney(src, session.account, price, ('%s vehicle %s'):format(kind, session.netId))
     if not paid then return sendResult(src, false, err == 'insufficient funds' and 'Insufficient funds.' or 'Payment could not be processed.') end
 
-    local noun = electric and 'charged' or 'refuelled'
-    sendResult(src, true, ('Vehicle %s for $%d.'):format(noun, price), Config.maxLevel, netId)
+    if type(SetVehicleFuelLevel) == 'function' then SetVehicleFuelLevel(vehicle, Config.maxLevel + 0.0) end
+    local noun = session.electric and 'charged' or 'refuelled'
+    sendResult(src, true, ('Vehicle %s for $%d.'):format(noun, price), Config.maxLevel, session.netId)
 end)
+
+RegisterNetEvent('qbfuel:server:cancelService', function(serviceToken)
+    local session = sessions[source]
+    if session and type(serviceToken) == 'string' and session.token == serviceToken then sessions[source] = nil end
+end)
+
+AddEventHandler('playerDropped', function() sessions[source] = nil end)
+AddEventHandler('QBCore:Server:OnPlayerUnload', function(src) sessions[src] = nil end)

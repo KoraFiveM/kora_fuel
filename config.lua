@@ -8,6 +8,8 @@ Config.serviceRadius = 45.0
 Config.vehicleSearchDistance = 6.0
 Config.progressMsPerUnit = 125
 Config.minimumProgressMs = 1500
+Config.serviceSessionGraceMs = 15000
+Config.serviceRateLimit = { max = 5, window = 10000 }
 
 Config.paymentAccounts = { 'cash', 'bank' }
 Config.pricePerUnit = {
