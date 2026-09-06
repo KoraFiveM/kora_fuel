@@ -15,6 +15,19 @@ local function currentLevel(vehicle)
     return Fuel.clampLevel(GetVehicleFuelLevel(vehicle))
 end
 
+local SERVICE_ANIMATION = {
+    dict = 'weapon@w_sp_jerrycan',
+    clip = 'fire',
+    flag = 49,
+}
+
+local FUEL_NOZZLE = {
+    model = 'prop_cs_fuel_nozle',
+    bone = 57005,
+    offset = vector3(0.13, 0.04, -0.03),
+    rotation = vector3(-42.0, -115.0, -15.0),
+}
+
 -- Small public API for garages, admin tools, and third-party vehicle scripts.
 -- EVs intentionally return their battery percentage through GetFuel too: it
 -- is the shared native level, while isElectricVehicle supplies the meaning.
@@ -44,7 +57,7 @@ local function closestServiceVehicle()
         notify('Park a vehicle next to the pump or charger.', 'error')
         return nil
     end
-    if IsVehicleEngineRunning(closest.id) then
+    if GetIsVehicleEngineRunning(closest.id) then
         notify('Switch the engine off before servicing the vehicle.', 'error')
         return nil
     end
@@ -53,7 +66,7 @@ end
 
 local function serviceVehicle(vehicle, account)
     if not DoesEntityExist(vehicle) then return notify('That vehicle is no longer available.', 'error') end
-    if IsVehicleEngineRunning(vehicle) then return notify('Switch the engine off before servicing the vehicle.', 'error') end
+    if GetIsVehicleEngineRunning(vehicle) then return notify('Switch the engine off before servicing the vehicle.', 'error') end
 
     local electric = isElectricVehicle(vehicle)
     local level = currentLevel(vehicle)
@@ -63,16 +76,30 @@ local function serviceVehicle(vehicle, account)
     end
 
     local label = electric and 'Charging vehicle' or 'Refuelling vehicle'
+    local ped = PlayerPedId()
+    TaskTurnPedToFaceEntity(ped, vehicle, 750)
+    Wait(750)
+    if not DoesEntityExist(vehicle) then return notify('That vehicle is no longer available.', 'error') end
+    if GetIsVehicleEngineRunning(vehicle) then return notify('Switch the engine off before servicing the vehicle.', 'error') end
+
     local completed = QB.progressbar.start({
         label = label,
         duration = math.max(Config.minimumProgressMs, math.floor(missing * Config.progressMsPerUnit)),
         canCancel = true,
         disable = { move = true, combat = true },
-        scenario = { name = electric and 'WORLD_HUMAN_STAND_MOBILE' or 'WORLD_HUMAN_GARDENER_PLANT' },
+        anim = SERVICE_ANIMATION,
+        props = { FUEL_NOZZLE },
     })
     if not completed then return notify(label .. ' cancelled.', 'inform') end
 
-    TriggerServerEvent('qbfuel:server:serviceVehicle', NetworkGetNetworkIdFromEntity(vehicle), account)
+    -- Fuel-level natives are client-only, so include the latest observed level
+    -- for the server to validate and use when calculating the payment.
+    TriggerServerEvent(
+        'qbfuel:server:serviceVehicle',
+        NetworkGetNetworkIdFromEntity(vehicle),
+        account,
+        currentLevel(vehicle)
+    )
 end
 
 local function openPaymentMenu()
@@ -102,8 +129,13 @@ QB.interact.addModel(Config.pumpModels, {
     { label = 'Service nearby vehicle', icon = 'fuel', action = openPaymentMenu },
 }, 2.5)
 
-RegisterNetEvent('qbfuel:client:serviceResult', function(ok, message, level)
+RegisterNetEvent('qbfuel:client:serviceResult', function(ok, message, level, netId)
     if ok then
+        local vehicle = type(netId) == 'number' and NetworkGetEntityFromNetworkId(netId) or 0
+        if type(level) == 'number' and vehicle ~= 0 and DoesEntityExist(vehicle) then
+            local controlled = QB.vehicle.requestControl(vehicle, 2000)
+            if controlled then SetVehicleFuelLevel(vehicle, Fuel.clampLevel(level) + 0.0) end
+        end
         notify(message, 'success')
         return
     end
@@ -115,7 +147,7 @@ CreateThread(function()
         Wait(Config.consumeInterval)
 
         local vehicle = QB.cache.vehicle()
-        if vehicle and QB.cache.seat() == -1 and IsVehicleEngineRunning(vehicle) and GetEntitySpeed(vehicle) >= 0.5 then
+        if vehicle and QB.cache.seat() == -1 and GetIsVehicleEngineRunning(vehicle) and GetEntitySpeed(vehicle) >= 0.5 then
             local level = currentLevel(vehicle)
             if level <= 0 then
                 SetVehicleEngineOn(vehicle, false, true, true)

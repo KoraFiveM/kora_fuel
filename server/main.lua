@@ -10,13 +10,14 @@ local function nearServicePoint(coords)
     return false
 end
 
-local function sendResult(src, ok, message, level)
-    TriggerClientEvent('qbfuel:client:serviceResult', src, ok, message, level)
+local function sendResult(src, ok, message, level, netId)
+    TriggerClientEvent('qbfuel:client:serviceResult', src, ok, message, level, netId)
 end
 
-RegisterNetEvent('qbfuel:server:serviceVehicle', function(netId, account)
+RegisterNetEvent('qbfuel:server:serviceVehicle', function(netId, account, level)
     local src = source
-    if type(netId) ~= 'number' or netId < 1 or not Fuel.isPaymentAccount(account) then
+    if type(netId) ~= 'number' or netId < 1 or not Fuel.isPaymentAccount(account)
+        or type(level) ~= 'number' or level ~= level or level < 0 or level > Config.maxLevel then
         return sendResult(src, false, 'Invalid service request.')
     end
 
@@ -31,9 +32,9 @@ RegisterNetEvent('qbfuel:server:serviceVehicle', function(netId, account)
     if distance(playerCoords, vehicleCoords) > Config.vehicleSearchDistance + 1.0 or not nearServicePoint(playerCoords) then
         return sendResult(src, false, 'Move closer to the service point and vehicle.')
     end
-    if IsVehicleEngineRunning(vehicle) then return sendResult(src, false, 'Switch the engine off before servicing.') end
+    if GetIsVehicleEngineRunning(vehicle) then return sendResult(src, false, 'Switch the engine off before servicing.') end
 
-    local level = Fuel.clampLevel(GetVehicleFuelLevel(vehicle))
+    level = Fuel.clampLevel(level)
     local missing = Config.maxLevel - level
     if missing < 0.5 then return sendResult(src, false, 'Vehicle is already full.') end
 
@@ -43,7 +44,6 @@ RegisterNetEvent('qbfuel:server:serviceVehicle', function(netId, account)
     local paid, err = exports.qbcore:removeMoney(src, account, price, ('%s vehicle %s'):format(kind, netId))
     if not paid then return sendResult(src, false, err == 'insufficient funds' and 'Insufficient funds.' or 'Payment could not be processed.') end
 
-    SetVehicleFuelLevel(vehicle, Config.maxLevel + 0.0)
     local noun = electric and 'charged' or 'refuelled'
-    sendResult(src, true, ('Vehicle %s for $%d.'):format(noun, price), Config.maxLevel)
+    sendResult(src, true, ('Vehicle %s for $%d.'):format(noun, price), Config.maxLevel, netId)
 end)
