@@ -76,3 +76,6 @@ Config.stations = {
     vector3(176.631, -1562.026, 29.263), vector3(-319.292, -1471.715, 30.549),
     vector3(1784.324, 3330.550, 41.253),
 }
+
+-- Registers this resource-owned configuration with qblib without changing its public Config table.
+if QB and QB.config and QB.config.adopt then Config = QB.config.adopt(Config) end
