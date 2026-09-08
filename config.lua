@@ -17,9 +17,12 @@ Config.pricePerUnit = {
     charge = 1.25,
 }
 
--- One second of driving consumes this amount at full RPM. The class table is
--- intentionally easy to tune; omitted classes use `default`.
+-- One second at the configured reference speed consumes this amount. Every
+-- class has its own rate; omitted classes use `default`.
 Config.consumeInterval = 1000
+Config.idleConsumptionMultiplier = 0.08
+Config.speedReference = 45.0 -- metres/second (162 km/h)
+Config.maxSpeedConsumptionMultiplier = 2.0
 Config.consumePerSecond = {
     default = 0.035,
     [0] = 0.018, -- compacts

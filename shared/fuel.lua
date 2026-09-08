@@ -25,6 +25,19 @@ function Fuel.clampLevel(value)
     return value
 end
 
+---@param vehicleClass number
+---@param speed number metres per second
+---@param intervalMs number
+---@return number usedFuel
+function Fuel.calculateConsumption(vehicleClass, speed, intervalMs)
+    local rate = Config.consumePerSecond[vehicleClass] or Config.consumePerSecond.default
+    local speedMultiplier = (tonumber(speed) or 0) / Config.speedReference
+    local multiplier = math.max(Config.idleConsumptionMultiplier, speedMultiplier)
+    multiplier = math.min(multiplier, Config.maxSpeedConsumptionMultiplier)
+
+    return rate * multiplier * ((tonumber(intervalMs) or Config.consumeInterval) / 1000)
+end
+
 ---@param account string
 ---@return boolean
 function Fuel.isPaymentAccount(account)

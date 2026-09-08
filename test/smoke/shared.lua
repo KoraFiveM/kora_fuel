@@ -27,6 +27,24 @@ harness.test('fuel level is clamped to the native 0-100 range', function()
     harness.assertEqual(Fuel.clampLevel(42.5), 42.5)
 end)
 
+harness.test('engine idle use is lower than moving use for the same vehicle class', function()
+    local idleUse = Fuel.calculateConsumption(7, 0, 1000)
+    local movingUse = Fuel.calculateConsumption(7, Config.speedReference, 1000)
+
+    harness.assertTrue(idleUse > 0, 'an idling engine should consume fuel')
+    harness.assertTrue(movingUse > idleUse, 'moving should consume more than idling')
+    harness.assertEqual(movingUse, Config.consumePerSecond[7])
+end)
+
+harness.test('vehicle classes retain independent consumption rates', function()
+    local compactUse = Fuel.calculateConsumption(0, Config.speedReference, 1000)
+    local superUse = Fuel.calculateConsumption(7, Config.speedReference, 1000)
+
+    harness.assertEqual(compactUse, Config.consumePerSecond[0])
+    harness.assertEqual(superUse, Config.consumePerSecond[7])
+    harness.assertTrue(superUse > compactUse)
+end)
+
 harness.test('only configured payment accounts are accepted', function()
     harness.assertTrue(Fuel.isPaymentAccount('cash'))
     harness.assertTrue(Fuel.isPaymentAccount('bank'))

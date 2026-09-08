@@ -143,15 +143,13 @@ CreateThread(function()
         Wait(Config.consumeInterval)
 
         local vehicle = QB.cache.vehicle()
-        if vehicle and QB.cache.seat() == -1 and GetIsVehicleEngineRunning(vehicle) and GetEntitySpeed(vehicle) >= 0.5 then
+        if vehicle and QB.cache.seat() == -1 and GetIsVehicleEngineRunning(vehicle) then
             local level = currentLevel(vehicle)
             if level <= 0 then
                 SetVehicleEngineOn(vehicle, false, true, true)
             else
                 local class = GetVehicleClass(vehicle)
-                local rate = Config.consumePerSecond[class] or Config.consumePerSecond.default
-                local rpm = math.max(0.15, GetVehicleCurrentRpm(vehicle))
-                local used = rate * (rpm * rpm) * (Config.consumeInterval / 1000)
+                local used = Fuel.calculateConsumption(class, GetEntitySpeed(vehicle), Config.consumeInterval)
                 local nextLevel = Fuel.clampLevel(level - used)
                 SetVehicleFuelLevel(vehicle, nextLevel)
                 if nextLevel <= 0 then SetVehicleEngineOn(vehicle, false, true, true) end
