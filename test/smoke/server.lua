@@ -18,6 +18,17 @@ _G.QB = {
     util = { isFiniteNumber = function(value)
         return type(value) == 'number' and value == value and value > -math.huge and value < math.huge
     end },
+    world = {
+        resolveNetworkEntity = function(src, netId)
+            local entity = NetworkGetEntityFromNetworkId(netId)
+            if entity == 0 or not DoesEntityExist(entity) then return nil, 'entity_unavailable' end
+            if GetEntityType(entity) ~= 2 then return nil, 'wrong_entity_type' end
+            if GetPlayerRoutingBucket(src) ~= GetEntityRoutingBucket(entity) then
+                return nil, 'routing_bucket_mismatch'
+            end
+            return entity
+        end,
+    },
 }
 _G.exports = {
     qbcore = {

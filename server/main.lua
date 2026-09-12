@@ -28,20 +28,22 @@ local function token()
 end
 
 local function vehicleFor(src, netId)
-    if type(netId) ~= 'number' or netId < 1 then return nil, 'Invalid service request.' end
-
-    local vehicle = NetworkGetEntityFromNetworkId(netId)
-    local ped = GetPlayerPed(src)
-    if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) or GetEntityType(vehicle) ~= 2
-        or not ped or ped == 0 or not DoesEntityExist(ped) then
+    local vehicle, reason = QB.world.resolveNetworkEntity(src, netId, {
+        entityType = 'vehicle',
+        maxDistance = Config.vehicleSearchDistance + 1.0,
+    })
+    if not vehicle then
+        if reason == 'invalid_network_id' then return nil, 'Invalid service request.' end
+        if reason == 'routing_bucket_mismatch' then return nil, 'Vehicle is in another instance.' end
+        if reason == 'too_far' then return nil, 'Move closer to the service point and vehicle.' end
         return nil, 'Vehicle is no longer available.'
     end
 
-    local playerCoords, vehicleCoords = GetEntityCoords(ped), GetEntityCoords(vehicle)
-    if distance(playerCoords, vehicleCoords) > Config.vehicleSearchDistance + 1.0 or not nearServicePoint(playerCoords) then
+    local ped = GetPlayerPed(src)
+    local playerCoords = GetEntityCoords(ped)
+    if not nearServicePoint(playerCoords) then
         return nil, 'Move closer to the service point and vehicle.'
     end
-    if GetPlayerRoutingBucket(src) ~= GetEntityRoutingBucket(vehicle) then return nil, 'Vehicle is in another instance.' end
     if GetIsVehicleEngineRunning(vehicle) then return nil, 'Switch the engine off before servicing.' end
     return vehicle
 end
