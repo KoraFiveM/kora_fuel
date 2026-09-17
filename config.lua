@@ -90,12 +90,14 @@ if QB and QB.config and QB.config.adopt then
         description = 'Sets the full-tank fuel or battery level on GTA’s native 0–100 vehicle fuel scale. Keep this at or below 100 so qbfuel, qbgarages, and the HUD agree on the stored vehicle state.',
     })
     Config.serviceRadius = QB.config.number(Config.serviceRadius, {
+        advanced = true,
         min = 1.0,
         step = 0.5,
         label = 'Fuel-station service radius',
         description = 'Sets the maximum distance in metres between a vehicle and a configured station coordinate before the server refuses a paid refuel or charge request. This server-side check must cover the intended forecourt without reaching unrelated nearby roads.',
     })
     Config.vehicleSearchDistance = QB.config.number(Config.vehicleSearchDistance, {
+        advanced = true,
         min = 1.0,
         step = 0.5,
         label = 'Nearby vehicle search distance',
@@ -103,15 +105,16 @@ if QB and QB.config and QB.config.adopt then
     })
     Config.progressMsPerUnit = QB.config.integer(Config.progressMsPerUnit, {
         min = 1,
-        label = 'Service time per fuel unit',
+        label = 'Service time per fuel unit (milliseconds)',
         description = 'Sets the number of milliseconds added to the refuelling or charging progress action for each missing fuel-level unit. Larger values make filling an emptier vehicle take proportionally longer.',
     })
     Config.minimumProgressMs = QB.config.integer(Config.minimumProgressMs, {
         min = 0,
-        label = 'Minimum service duration',
+        label = 'Minimum service duration (milliseconds)',
         description = 'Sets the minimum refuelling or charging action duration in milliseconds, even when the vehicle needs only a small amount. Use zero only if near-full top-ups may complete immediately.',
     })
     Config.serviceSessionGraceMs = QB.config.integer(Config.serviceSessionGraceMs, {
+        advanced = true,
         min = 0,
         label = 'Service completion grace period',
         description = 'Sets how many extra milliseconds the server keeps an authorized refuelling session valid after its expected progress duration. This absorbs normal client and network delay without leaving payment tokens reusable indefinitely.',
@@ -127,9 +130,10 @@ if QB and QB.config and QB.config.adopt then
             label = 'Service rate-limit window',
             description = 'Sets the rolling rate-limit window in milliseconds used to count one player’s refuel or charge session requests.',
         }),
-    })
+    }, { advanced = true })
     Config.paymentAccounts = QB.config.list(Config.paymentAccounts,
         QB.config.enum('cash', { options = { 'cash', 'bank', 'crypto' } }), {
+            advanced = false,
             label = 'Accepted payment accounts',
             description = 'Lists the player money accounts accepted for fuel and charging purchases, in display priority order. Every entry must be a supported qbcore account; removing an account prevents players from selecting it at the pump.',
         })
@@ -148,6 +152,7 @@ if QB and QB.config and QB.config.adopt then
         }),
     })
     Config.consumeInterval = QB.config.integer(Config.consumeInterval, {
+        advanced = true,
         min = 100,
         label = 'Fuel-consumption update interval',
         description = 'Sets how often the client calculates and applies fuel or battery drain, in milliseconds. Lower values make the gauge update more frequently but increase client work; consumption is time-scaled so changing this interval does not change the overall drain rate.',
@@ -160,6 +165,7 @@ if QB and QB.config and QB.config.adopt then
         description = 'Scales the configured vehicle-class consumption rate while the engine is running at idle. A value of 0 disables idle drain, 1 uses the full reference-speed rate, and values between them apply a proportional fraction.',
     })
     Config.speedReference = QB.config.number(Config.speedReference, {
+        advanced = true,
         min = 0.1,
         step = 0.5,
         label = 'Consumption reference speed',
