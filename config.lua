@@ -81,4 +81,119 @@ Config.stations = {
 }
 
 -- Registers this resource-owned configuration with qblib without changing its public Config table.
-if QB and QB.config and QB.config.adopt then Config = QB.config.adopt(Config) end
+if QB and QB.config and QB.config.adopt then
+    Config.maxLevel = QB.config.number(Config.maxLevel, {
+        min = 1.0,
+        max = 100.0,
+        step = 1.0,
+        label = 'Maximum fuel level',
+        description = 'Sets the full-tank fuel or battery level on GTA’s native 0–100 vehicle fuel scale. Keep this at or below 100 so qbfuel, qbgarages, and the HUD agree on the stored vehicle state.',
+    })
+    Config.serviceRadius = QB.config.number(Config.serviceRadius, {
+        min = 1.0,
+        step = 0.5,
+        label = 'Fuel-station service radius',
+        description = 'Sets the maximum distance in metres between a vehicle and a configured station coordinate before the server refuses a paid refuel or charge request. This server-side check must cover the intended forecourt without reaching unrelated nearby roads.',
+    })
+    Config.vehicleSearchDistance = QB.config.number(Config.vehicleSearchDistance, {
+        min = 1.0,
+        step = 0.5,
+        label = 'Nearby vehicle search distance',
+        description = 'Sets how many metres the client searches from a pump interaction to find the vehicle being serviced. Keep this comfortably below the station service radius so the client interaction and server authorization boundaries remain consistent.',
+    })
+    Config.progressMsPerUnit = QB.config.integer(Config.progressMsPerUnit, {
+        min = 1,
+        label = 'Service time per fuel unit',
+        description = 'Sets the number of milliseconds added to the refuelling or charging progress action for each missing fuel-level unit. Larger values make filling an emptier vehicle take proportionally longer.',
+    })
+    Config.minimumProgressMs = QB.config.integer(Config.minimumProgressMs, {
+        min = 0,
+        label = 'Minimum service duration',
+        description = 'Sets the minimum refuelling or charging action duration in milliseconds, even when the vehicle needs only a small amount. Use zero only if near-full top-ups may complete immediately.',
+    })
+    Config.serviceSessionGraceMs = QB.config.integer(Config.serviceSessionGraceMs, {
+        min = 0,
+        label = 'Service completion grace period',
+        description = 'Sets how many extra milliseconds the server keeps an authorized refuelling session valid after its expected progress duration. This absorbs normal client and network delay without leaving payment tokens reusable indefinitely.',
+    })
+    Config.serviceRateLimit = QB.config.object({
+        max = QB.config.integer(Config.serviceRateLimit.max, {
+            min = 1,
+            label = 'Service requests per window',
+            description = 'Sets the maximum number of refuel or charge session requests one player may make during the configured rate-limit window. Requests over this limit are rejected before session work is allocated.',
+        }),
+        window = QB.config.integer(Config.serviceRateLimit.window, {
+            min = 1,
+            label = 'Service rate-limit window',
+            description = 'Sets the rolling rate-limit window in milliseconds used to count one player’s refuel or charge session requests.',
+        }),
+    })
+    Config.paymentAccounts = QB.config.list(Config.paymentAccounts,
+        QB.config.enum('cash', { options = { 'cash', 'bank', 'crypto' } }), {
+            label = 'Accepted payment accounts',
+            description = 'Lists the player money accounts accepted for fuel and charging purchases, in display priority order. Every entry must be a supported qbcore account; removing an account prevents players from selecting it at the pump.',
+        })
+    Config.pricePerUnit = QB.config.object({
+        fuel = QB.config.number(Config.pricePerUnit.fuel, {
+            min = 0,
+            step = 0.01,
+            label = 'Petrol price per unit',
+            description = 'Sets the amount charged from the selected player account for each native fuel-level unit added to a petrol vehicle. The server calculates the final price from the vehicle’s authoritative current level.',
+        }),
+        charge = QB.config.number(Config.pricePerUnit.charge, {
+            min = 0,
+            step = 0.01,
+            label = 'Electric charge price per unit',
+            description = 'Sets the amount charged from the selected player account for each native fuel-level unit added to an electric vehicle’s battery. The server calculates the final price from the authoritative vehicle level.',
+        }),
+    })
+    Config.consumeInterval = QB.config.integer(Config.consumeInterval, {
+        min = 100,
+        label = 'Fuel-consumption update interval',
+        description = 'Sets how often the client calculates and applies fuel or battery drain, in milliseconds. Lower values make the gauge update more frequently but increase client work; consumption is time-scaled so changing this interval does not change the overall drain rate.',
+    })
+    Config.idleConsumptionMultiplier = QB.config.number(Config.idleConsumptionMultiplier, {
+        min = 0,
+        max = 1,
+        step = 0.01,
+        label = 'Idle consumption multiplier',
+        description = 'Scales the configured vehicle-class consumption rate while the engine is running at idle. A value of 0 disables idle drain, 1 uses the full reference-speed rate, and values between them apply a proportional fraction.',
+    })
+    Config.speedReference = QB.config.number(Config.speedReference, {
+        min = 0.1,
+        step = 0.5,
+        label = 'Consumption reference speed',
+        description = 'Defines the vehicle speed, in metres per second, at which the authored class consumption rate is used without additional speed scaling. The default 45 m/s is approximately 162 km/h or 101 mph.',
+    })
+    Config.maxSpeedConsumptionMultiplier = QB.config.number(Config.maxSpeedConsumptionMultiplier, {
+        min = 1,
+        step = 0.1,
+        label = 'Maximum speed consumption multiplier',
+        description = 'Caps the amount by which speed can multiply the base vehicle-class consumption rate. This prevents unusually fast or modified vehicles from producing unbounded fuel drain.',
+    })
+    Config.consumePerSecond = QB.config.map(Config.consumePerSecond, QB.config.number(0.0, {
+        min = 0.0,
+        step = 0.001,
+    }), {
+        keyType = 'mixed',
+        requiredKeys = { 'default' },
+        label = 'Fuel consumption by vehicle class',
+        description = 'Sets the fuel or battery charge consumed each second at the reference speed for every GTA vehicle class. Numeric keys are GTA class IDs; the “default” row is used when a class has no explicit rate. Values must be zero or greater, and changes take effect after qbfuel restarts.',
+    })
+    Config.electricVehicles = QB.config.list(Config.electricVehicles,
+        QB.config.string('', { minLength = 1 }), {
+            label = 'Electric vehicle models',
+            description = 'Lists GTA and add-on vehicle spawn names that use battery charge rather than petrol. The same list controls pump wording, server-side service validation, fuel drain, and the HUD fuel presentation.',
+        })
+    Config.pumpModels = QB.config.list(Config.pumpModels,
+        QB.config.string('', { minLength = 1 }), {
+            label = 'Fuel pump models',
+            description = 'Lists world prop model names that players can target to refuel or charge a nearby vehicle. Add compatible pump or charger props here when using custom map assets.',
+        })
+    Config.stations = QB.config.list(Config.stations,
+        QB.config.vector3(vector3(0.0, 0.0, 0.0)), {
+            label = 'Fuel station coordinates',
+            description = 'Lists the world positions where the server permits paid refuelling or charging. The server checks these coordinates before taking payment, so this list is an authorization boundary as well as interaction data.',
+        })
+    Config = QB.config.adopt(Config)
+end
