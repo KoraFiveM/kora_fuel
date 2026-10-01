@@ -98,7 +98,7 @@ local function buildApp(spec)
 
     local unitLabel = spec.electric and 'charge' or 'fuel'
 
-    return {
+    local definition = {
         id = appId,
         title = spec.title,
         description = spec.electric and 'Battery charge' or 'Petrol pump',
@@ -130,7 +130,7 @@ local function buildApp(spec)
                             items = {
                                 { label = 'Price per unit', value = ('$%.2f'):format(spec.unitPrice) },
                                 {
-                                    label = 'Cost to fill',
+                                    label = 'Total Price',
                                     value = ('$%d'):format(spec.priceFor(spec.capacity)),
                                     description = ('%d units'):format(spec.capacity),
                                 },
@@ -170,6 +170,17 @@ local function buildApp(spec)
         },
         onAction = onAppAction,
     }
+    definition.onChange = function(actionId, context)
+        if actionId ~= 'fuel-submit' then return end
+        local quantity = tonumber(context.value.quantity)
+        if not quantity or quantity % 1 ~= 0 or quantity < 1 or quantity > spec.capacity then return end
+
+        local total = definition.navigation[1].content.blocks[2].items[2]
+        total.value = ('$%d'):format(spec.priceFor(quantity))
+        total.description = ('%d units'):format(quantity)
+        return { navigation = definition.navigation }
+    end
+    return definition
 end
 
 local function openFuelMenu()
