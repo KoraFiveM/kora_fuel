@@ -11,26 +11,29 @@ end
 
 exports('isElectricVehicle', isElectricVehicle)
 
+-- Display/service level: whole numbers only.
 local function currentLevel(vehicle)
+    return math.floor(Fuel.clampLevel(GetVehicleFuelLevel(vehicle)))
+end
+
+-- Drain needs the unrounded value, otherwise every tick would cost a full unit.
+local function rawLevel(vehicle)
     return Fuel.clampLevel(GetVehicleFuelLevel(vehicle))
 end
 
-local SERVICE_ANIMATION = {
+local serviceAnimation = {
     dict = 'weapon@w_sp_jerrycan',
     clip = 'fire',
     flag = 49,
 }
 
-local FUEL_NOZZLE = {
+local fuelNozzle = {
     model = 'prop_cs_fuel_nozle',
     bone = 57005,
     offset = vector3(0.13, 0.04, -0.03),
     rotation = vector3(-42.0, -115.0, -15.0),
 }
 
--- Small public API for garages, admin tools, and third-party vehicle scripts.
--- EVs intentionally return their battery percentage through GetFuel too: it
--- is the shared native level, while isElectricVehicle supplies the meaning.
 exports('GetFuel', currentLevel)
 exports('SetFuel', function(vehicle, level)
     if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) then return false end
@@ -64,78 +67,174 @@ local function closestServiceVehicle()
     return closest.id
 end
 
-local function serviceVehicle(vehicle, account)
-    if not DoesEntityExist(vehicle) then return notify('That vehicle is no longer available.', 'error') end
-    if GetIsVehicleEngineRunning(vehicle) then return notify('Switch the engine off before servicing the vehicle.', 'error') end
+local appId = 'qbfuel:pump'
 
-    local netId = NetworkGetNetworkIdFromEntity(vehicle)
-    local session = QB.callback.trigger('qbfuel:beginService', netId, account)
-    if not session or not session.ok then
-        return notify(session and session.message or 'Service could not be authorised.', 'error')
-    end
-
-    local label = session.electric and 'Charging vehicle' or 'Refuelling vehicle'
-    local ped = PlayerPedId()
-    TaskTurnPedToFaceEntity(ped, vehicle, 750)
-    Wait(750)
-    if not DoesEntityExist(vehicle) then return notify('That vehicle is no longer available.', 'error') end
-    if GetIsVehicleEngineRunning(vehicle) then return notify('Switch the engine off before servicing the vehicle.', 'error') end
-
-    local completed = QB.progressbar.start({
-        label = label,
-        duration = session.duration,
-        canCancel = true,
-        disable = { move = true, combat = true },
-        anim = SERVICE_ANIMATION,
-        props = { FUEL_NOZZLE },
-    })
-    if not completed then
-        TriggerServerEvent('qbfuel:server:cancelService', session.token)
-        return notify(label .. ' cancelled.', 'inform')
-    end
-
-    TriggerServerEvent('qbfuel:server:serviceVehicle', session.token)
+local function titleCase(text)
+    return (tostring(text):gsub('^%l', string.upper))
 end
 
-local function openPaymentMenu()
+-- Static for the lifetime of the shell. Per-open values (netId, level, capacity)
+-- travel in openApp's private `data` and come back as `context.data`.
+local function onAppAction(actionId, context)
+    if actionId ~= 'fuel-submit' then return end
+
+    local data, value = context.data, context.value
+    if type(data) ~= 'table' or type(value) ~= 'table' then return end
+
+    local quantity = math.floor(tonumber(value.quantity) or 0)
+    if quantity < 1 or quantity > data.capacity then
+        return { notice = { tone = 'destructive', message = 'Invalid fill amount.' } }
+    end
+
+    TriggerServerEvent('qbfuel:server:purchase', data.netId, value.account, quantity, data.level)
+    return { close = true }
+end
+
+local function buildApp(spec)
+    local accountOptions = {}
+    for _, account in ipairs(spec.accounts) do
+        accountOptions[#accountOptions + 1] = { value = account, label = titleCase(account) }
+    end
+
+    local unitLabel = spec.electric and 'charge' or 'fuel'
+
+    return {
+        id = appId,
+        title = spec.title,
+        description = spec.electric and 'Battery charge' or 'Petrol pump',
+        icon = spec.electric and 'Zap' or 'Fuel',
+        layout = 'compact',
+        placement = 'right',
+        width = 420,
+        defaultView = 'service',
+        navigation = {
+            {
+                id = 'service',
+                label = spec.title,
+                content = {
+                    blocks = {
+                        {
+                            type = 'progress',
+                            items = {
+                                {
+                                    label = titleCase(unitLabel) .. ' level',
+                                    value = spec.level,
+                                    max = Config.maxLevel,
+                                    detail = ('%d / %d'):format(spec.level, math.floor(Config.maxLevel)),
+                                    tone = spec.level <= 15 and 'destructive' or 'primary',
+                                },
+                            },
+                        },
+                        {
+                            type = 'stats',
+                            items = {
+                                { label = 'Price per unit', value = ('$%.2f'):format(spec.unitPrice) },
+                                {
+                                    label = 'Cost to fill',
+                                    value = ('$%d'):format(spec.priceFor(spec.capacity)),
+                                    description = ('%d units'):format(spec.capacity),
+                                },
+                            },
+                        },
+                        {
+                            type = 'form',
+                            id = 'fuel-form',
+                            submitLabel = spec.electric and 'Charge' or 'Fill up',
+                            action = { id = 'fuel-submit', label = 'Confirm', closeBeforeAction = true },
+                            fields = {
+                                {
+                                    id = 'quantity',
+                                    label = 'Amount to add',
+                                    description = ('$%.2f per unit, up to %d units.'):format(spec.unitPrice, spec.capacity),
+                                    type = 'range',
+                                    min = 1,
+                                    max = spec.capacity,
+                                    step = 1,
+                                    wholeNumber = true,
+                                    default = spec.capacity,
+                                    required = true,
+                                },
+                                {
+                                    id = 'account',
+                                    label = 'Pay with',
+                                    type = 'select',
+                                    options = accountOptions,
+                                    default = spec.accounts[1],
+                                    required = true,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        onAction = onAppAction,
+    }
+end
+
+local function openFuelMenu()
     local vehicle = closestServiceVehicle()
     if not vehicle then return end
 
+    local level = currentLevel(vehicle)
+    local capacity = math.floor(Config.maxLevel) - level
+    if capacity < 1 then return notify('Vehicle is already full.', 'inform') end
+
     local electric = isElectricVehicle(vehicle)
     local kind = electric and 'charge' or 'fuel'
-    local unitPrice = Config.pricePerUnit[kind]
-    local action = electric and 'Charge vehicle' or 'Refuel vehicle'
-    local options = {}
+    local netId = NetworkGetNetworkIdFromEntity(vehicle)
 
-    for _, account in ipairs(Config.paymentAccounts) do
-        local selectedAccount = account
-        options[#options + 1] = {
-            label = ('%s — pay with %s ($%.2f/unit)'):format(action, selectedAccount, unitPrice),
-            action = function() serviceVehicle(vehicle, selectedAccount) end,
-        }
-    end
-    QB.interact.open(options)
+    QB.nui.registerApp(buildApp({
+        title = electric and 'Charge vehicle' or 'Refuel vehicle',
+        electric = electric,
+        level = level,
+        capacity = capacity,
+        accounts = Config.paymentAccounts,
+        unitPrice = Config.pricePerUnit[kind],
+        priceFor = function(quantity) return Fuel.price(kind, quantity) end,
+    }))
+
+    QB.nui.openApp(appId, {
+        data = { netId = netId, level = level, capacity = capacity },
+    })
 end
 
--- Pump interactions work wherever vanilla pumps stream in. The service-area
--- gate remains server-authoritative; EVs use those same service points as
--- charging points, so this needs no custom map or charger-prop dependency.
 QB.interact.addModel(Config.pumpModels, {
-    { label = 'Service nearby vehicle', icon = 'fuel', action = openPaymentMenu },
+    { label = 'Service nearby vehicle', icon = 'fuel', action = openFuelMenu },
 }, 2.5)
 
-RegisterNetEvent('qbfuel:client:serviceResult', function(ok, message, level, netId)
-    if ok then
-        local vehicle = type(netId) == 'number' and NetworkGetEntityFromNetworkId(netId) or 0
-        if type(level) == 'number' and vehicle ~= 0 and DoesEntityExist(vehicle) then
-            if NetworkHasControlOfEntity(vehicle) then
-                SetVehicleFuelLevel(vehicle, Fuel.clampLevel(level) + 0.0)
-            end
-        end
-        notify(message, 'success')
-        return
-    end
-    notify(message or 'Unable to service that vehicle.', 'error')
+QB.callback.register('qbfuel:runProgress', function(netId, duration, electric)
+    local vehicle = NetworkGetEntityFromNetworkId(netId)
+    if vehicle == 0 or not DoesEntityExist(vehicle) then return false end
+    if GetIsVehicleEngineRunning(vehicle) then return false end
+
+    local ped = PlayerPedId()
+    TaskTurnPedToFaceEntity(ped, vehicle, 750)
+    Wait(750)
+    if not DoesEntityExist(vehicle) or GetIsVehicleEngineRunning(vehicle) then return false end
+
+    local label = electric and 'Charging vehicle' or 'Refuelling vehicle'
+    local completed = QB.progressbar.start({
+        label = label,
+        duration = duration,
+        canCancel = true,
+        disable = { move = true, combat = true },
+        anim = serviceAnimation,
+        props = { fuelNozzle },
+    })
+    if not completed then notify(label .. ' cancelled.', 'inform') end
+    return completed == true
+end)
+
+RegisterNetEvent('qbfuel:client:fillVehicle', function(netId, quantity)
+    if source ~= 65535 then return end
+    local vehicle = type(netId) == 'number' and NetworkGetEntityFromNetworkId(netId) or 0
+    if vehicle == 0 or not DoesEntityExist(vehicle) or type(quantity) ~= 'number' then return end
+    SetVehicleFuelLevel(vehicle, Fuel.clampLevel(currentLevel(vehicle) + quantity) + 0.0)
+end)
+
+RegisterNetEvent('qbfuel:client:serviceResult', function(ok, message)
+    notify(message or 'Unable to service that vehicle.', ok and 'success' or 'error')
 end)
 
 CreateThread(function()
@@ -144,12 +243,11 @@ CreateThread(function()
 
         local vehicle = QB.cache.vehicle()
         if vehicle and QB.cache.seat() == -1 and GetIsVehicleEngineRunning(vehicle) then
-            local level = currentLevel(vehicle)
+            local level = rawLevel(vehicle)
             if level <= 0 then
                 SetVehicleEngineOn(vehicle, false, true, true)
             else
-                local class = GetVehicleClass(vehicle)
-                local used = Fuel.calculateConsumption(class, GetEntitySpeed(vehicle), Config.consumeInterval)
+                local used = Fuel.calculateConsumption(GetVehicleClass(vehicle), GetEntitySpeed(vehicle), Config.consumeInterval)
                 local nextLevel = Fuel.clampLevel(level - used)
                 SetVehicleFuelLevel(vehicle, nextLevel)
                 if nextLevel <= 0 then SetVehicleEngineOn(vehicle, false, true, true) end

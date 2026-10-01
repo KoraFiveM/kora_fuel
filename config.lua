@@ -58,7 +58,7 @@ Config.electricVehicles = {
 -- shows "Refuel vehicle".
 Config.pumpModels = {
     'prop_gas_pump_1a', 'prop_gas_pump_1b', 'prop_gas_pump_1c',
-    'prop_gas_pump_1d', 'prop_vintage_pump',
+    'prop_gas_pump_1d', 'prop_vintage_pump', 'prop_gas_pump_old2'
 }
 
 -- Service areas are deliberately server-side too: the client may choose an

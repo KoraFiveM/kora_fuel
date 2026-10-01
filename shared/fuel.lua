@@ -46,3 +46,16 @@ function Fuel.isPaymentAccount(account)
     end
     return false
 end
+
+---@param kind string 'fuel'|'charge'
+---@param quantity number
+---@return number
+function Fuel.price(kind, quantity)
+    return math.ceil((tonumber(quantity) or 0) * (Config.pricePerUnit[kind] or 0))
+end
+
+---@param quantity number
+---@return number
+function Fuel.progressDuration(quantity)
+    return math.max(Config.minimumProgressMs, math.floor(quantity * Config.progressMsPerUnit))
+end
