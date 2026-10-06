@@ -8,14 +8,9 @@ local function askClient(src, name, ...)
     return QB.callback.trigger(src, name, ...)
 end
 
-local function distance(a, b)
-    local dx, dy, dz = a.x - b.x, a.y - b.y, a.z - b.z
-    return math.sqrt(dx * dx + dy * dy + dz * dz)
-end
-
 local function nearServicePoint(coords)
     for _, station in ipairs(Config.stations) do
-        if distance(coords, station) <= Config.serviceRadius then return true end
+        if QB.distance.coords(coords, station, Config.serviceRadius) then return true end
     end
     return false
 end
