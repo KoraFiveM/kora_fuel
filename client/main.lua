@@ -35,10 +35,23 @@ local fuelNozzle = {
 }
 
 exports('GetFuel', currentLevel)
-exports('SetFuel', function(vehicle, level)
+local function setFuel(vehicle, level)
     if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) then return false end
     SetVehicleFuelLevel(vehicle, Fuel.clampLevel(level) + 0.0)
     return true
+end
+exports('SetFuel', setFuel)
+
+-- Keep LegacyFuel's fractional reads and nil return while using native fuel state.
+QB.compat.provideExport('LegacyFuel', 'GetFuel', function(vehicle)
+    if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) or not IsEntityAVehicle(vehicle) then return end
+    return GetVehicleFuelLevel(vehicle)
+end)
+QB.compat.provideExport('LegacyFuel', 'SetFuel', function(vehicle, level)
+    if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) or not IsEntityAVehicle(vehicle) then return end
+    if type(level) ~= 'number' or level ~= level or math.abs(level) == math.huge then return end
+    NetworkRequestControlOfEntity(vehicle)
+    setFuel(vehicle, level)
 end)
 
 local function nearServicePoint(coords)

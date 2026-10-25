@@ -7,6 +7,8 @@ author 'qbcore2'
 version '1.0.0'
 description 'Vehicle fuel and EV charging for the qblib test server'
 
+provide 'LegacyFuel'
+
 dependency 'qblib'
 dependency 'qbcore'
 dependency 'qbtarget'
