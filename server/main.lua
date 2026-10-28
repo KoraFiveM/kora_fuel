@@ -1,7 +1,7 @@
 local busy = {}
 
 local function getBalance(src, account)
-    return exports.qbcore:getMoney(src, account)
+    return exports.kora_core:getMoney(src, account)
 end
 
 local function askClient(src, name, ...)
@@ -80,7 +80,7 @@ RegisterNetEvent('qbfuel:server:purchase', function(netId, account, quantity, cu
         info, reason = validate(src, netId, account, quantity, currentLevel)
         if not info then return sendResult(src, false, reason) end
         QB.print.debug(netId, account, quantity, currentLevel, info)
-        local paid, payErr = exports.qbcore:removeMoney(src, account, info.price, ('%s vehicle %s'):format(info.kind, netId))
+        local paid, payErr = exports.kora_core:removeMoney(src, account, info.price, ('%s vehicle %s'):format(info.kind, netId))
         if not paid then
             return sendResult(src, false, payErr == 'insufficient funds' and 'Insufficient funds.' or 'Payment could not be processed.')
         end

@@ -1,7 +1,7 @@
 Config = Config or {}
 
 -- Both petrol and battery charge use GTA's native 0-100 vehicle fuel level.
--- That makes charge survive vehicle streaming and lets qbgarages persist it
+-- That makes charge survive vehicle streaming and lets kora_garages persist it
 -- through its existing fuel snapshot without a second database column.
 Config.maxLevel = 100.0
 Config.serviceRadius = 45.0
@@ -80,7 +80,7 @@ Config.stations = {
     vector3(1784.324, 3330.550, 41.253),
 }
 
--- Registers this resource-owned configuration with qblib without changing its public Config table.
+-- Registers this resource-owned configuration with kora_lib without changing its public Config table.
 if QB and QB.config and QB.config.adopt then
     Config.maxLevel = QB.config.number(Config.maxLevel, {
         min = 1.0,

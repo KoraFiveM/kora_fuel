@@ -39,7 +39,7 @@ _G.QB = {
     },
 }
 _G.exports = {
-    qbcore = {
+    kora_core = {
         getMoney = function() return balance end,
         removeMoney = function(_, src, account, amount)
             payments[#payments + 1] = { src = src, account = account, amount = amount }

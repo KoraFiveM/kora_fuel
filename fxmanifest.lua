@@ -2,18 +2,20 @@ fx_version 'cerulean'
 game 'gta5'
 lua54 'yes'
 
-name 'qbfuel'
+name 'kora_fuel'
+-- Keep the legacy resource name resolvable for exports['qbfuel'] callers.
+provide 'qbfuel'
 author 'qbcore2'
 version '1.0.0'
 description 'Vehicle fuel and EV charging for the qblib test server'
 
 provide 'LegacyFuel'
 
-dependency 'qblib'
-dependency 'qbcore'
-dependency 'qbtarget'
+dependency 'kora_lib'
+dependency 'kora_core'
+dependency 'kora_target'
 
-shared_script '@qblib/init.lua'
+shared_script '@kora_lib/init.lua'
 
 shared_scripts {
     'config.lua',

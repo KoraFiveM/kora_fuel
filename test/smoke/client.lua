@@ -38,7 +38,7 @@ QB = {
 }
 TriggerServerEvent = function(...) purchase = { ... } end
 
-QB.compat = dofile(repoRoot .. '../qblib/compat/provider.lua')()
+QB.compat = dofile(repoRoot .. '../kora_lib/compat/provider.lua')()
 
 dofile(repoRoot .. 'config.lua')
 dofile(repoRoot .. 'shared/fuel.lua')
