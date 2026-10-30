@@ -1,5 +1,5 @@
 local function notify(message, kind)
-    QB.notify.send({ title = 'Fuel', message = message, type = kind or 'inform' })
+    QB.notify.send({ title = 'Fuel', message = message, type = kind or 'info' })
 end
 
 ---@param vehicle integer
@@ -202,7 +202,7 @@ local function openFuelMenu()
 
     local level = currentLevel(vehicle)
     local capacity = math.floor(Config.maxLevel) - level
-    if capacity < 1 then return notify('Vehicle is already full.', 'inform') end
+    if capacity < 1 then return notify('Vehicle is already full.', 'info') end
 
     local electric = isElectricVehicle(vehicle)
     local kind = electric and 'charge' or 'fuel'
@@ -246,7 +246,7 @@ QB.callback.register('qbfuel:runProgress', function(netId, duration, electric)
         anim = serviceAnimation,
         props = { fuelNozzle },
     })
-    if not completed then notify(label .. ' cancelled.', 'inform') end
+    if not completed then notify(label .. ' cancelled.', 'info') end
     return completed == true
 end)
 
