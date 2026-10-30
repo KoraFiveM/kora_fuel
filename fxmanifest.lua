@@ -7,7 +7,7 @@ name 'kora_fuel'
 provide 'qbfuel'
 author 'qbcore2'
 version '1.0.0'
-description 'Vehicle fuel and EV charging for the qblib test server'
+description 'Vehicle fuel and EV charging for the kora_lib test server'
 
 provide 'LegacyFuel'
 
