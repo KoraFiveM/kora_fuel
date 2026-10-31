@@ -26,7 +26,7 @@ local model = 'adder'
 GetEntityModel = function() return model end
 
 local openMenu, app, openData, purchase
-QB = {
+Kora = {
     notify = { send = function() error('Unexpected notification') end },
     closest = { vehicle = function() return { id = 2 } end },
     interact = { addModel = function(_, options) openMenu = options[1].action end },
@@ -38,7 +38,7 @@ QB = {
 }
 TriggerServerEvent = function(...) purchase = { ... } end
 
-QB.compat = dofile(repoRoot .. '../kora_lib/compat/provider.lua')()
+Kora.compat = dofile(repoRoot .. '../kora_lib/compat/provider.lua')()
 
 dofile(repoRoot .. 'config.lua')
 dofile(repoRoot .. 'shared/fuel.lua')

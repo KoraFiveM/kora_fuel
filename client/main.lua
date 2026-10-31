@@ -1,5 +1,5 @@
 local function notify(message, kind)
-    QB.notify.send({ title = 'Fuel', message = message, type = kind or 'info' })
+    Kora.notify.send({ title = 'Fuel', message = message, type = kind or 'info' })
 end
 
 ---@param vehicle integer
@@ -43,11 +43,11 @@ end
 exports('SetFuel', setFuel)
 
 -- Keep LegacyFuel's fractional reads and nil return while using native fuel state.
-QB.compat.provideExport('LegacyFuel', 'GetFuel', function(vehicle)
+Kora.compat.provideExport('LegacyFuel', 'GetFuel', function(vehicle)
     if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) or not IsEntityAVehicle(vehicle) then return end
     return GetVehicleFuelLevel(vehicle)
 end)
-QB.compat.provideExport('LegacyFuel', 'SetFuel', function(vehicle, level)
+Kora.compat.provideExport('LegacyFuel', 'SetFuel', function(vehicle, level)
     if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) or not IsEntityAVehicle(vehicle) then return end
     if type(level) ~= 'number' or level ~= level or math.abs(level) == math.huge then return end
     NetworkRequestControlOfEntity(vehicle)
@@ -68,7 +68,7 @@ local function closestServiceVehicle()
         return nil
     end
 
-    local closest = QB.closest.vehicle(pedCoords, Config.vehicleSearchDistance)
+    local closest = Kora.closest.vehicle(pedCoords, Config.vehicleSearchDistance)
     if not closest.id or not DoesEntityExist(closest.id) then
         notify('Park a vehicle next to the pump or charger.', 'error')
         return nil
@@ -208,7 +208,7 @@ local function openFuelMenu()
     local kind = electric and 'charge' or 'fuel'
     local netId = NetworkGetNetworkIdFromEntity(vehicle)
 
-    QB.nui.registerApp(buildApp({
+    Kora.nui.registerApp(buildApp({
         title = electric and 'Charge vehicle' or 'Refuel vehicle',
         electric = electric,
         level = level,
@@ -218,16 +218,16 @@ local function openFuelMenu()
         priceFor = function(quantity) return Fuel.price(kind, quantity) end,
     }))
 
-    QB.nui.openApp(appId, {
+    Kora.nui.openApp(appId, {
         data = { netId = netId, level = level, capacity = capacity },
     })
 end
 
-QB.interact.addModel(Config.pumpModels, {
+Kora.interact.addModel(Config.pumpModels, {
     { label = 'Service nearby vehicle', icon = 'fuel', action = openFuelMenu },
 }, 2.5)
 
-QB.callback.register('qbfuel:runProgress', function(netId, duration, electric)
+Kora.callback.register('qbfuel:runProgress', function(netId, duration, electric)
     local vehicle = NetworkGetEntityFromNetworkId(netId)
     if vehicle == 0 or not DoesEntityExist(vehicle) then return false end
     if GetIsVehicleEngineRunning(vehicle) then return false end
@@ -238,7 +238,7 @@ QB.callback.register('qbfuel:runProgress', function(netId, duration, electric)
     if not DoesEntityExist(vehicle) or GetIsVehicleEngineRunning(vehicle) then return false end
 
     local label = electric and 'Charging vehicle' or 'Refuelling vehicle'
-    local completed = QB.progressbar.start({
+    local completed = Kora.progressbar.start({
         label = label,
         duration = duration,
         canCancel = true,
@@ -265,8 +265,8 @@ CreateThread(function()
     while true do
         Wait(Config.consumeInterval)
 
-        local vehicle = QB.cache.vehicle()
-        if vehicle and QB.cache.seat() == -1 and GetIsVehicleEngineRunning(vehicle) then
+        local vehicle = Kora.cache.vehicle()
+        if vehicle and Kora.cache.seat() == -1 and GetIsVehicleEngineRunning(vehicle) then
             local level = rawLevel(vehicle)
             if level <= 0 then
                 SetVehicleEngineOn(vehicle, false, true, true)

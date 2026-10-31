@@ -13,7 +13,7 @@ _G.joaat = function(model)
     for i = 1, #model do hash = hash * 31 + model:byte(i) end
     return hash
 end
-_G.QB = {
+_G.Kora = {
     distance = { coords = function(a, b, distance)
         local dx, dy, dz = a.x - b.x, a.y - b.y, a.z - b.z
         return dx * dx + dy * dy + dz * dz <= distance * distance

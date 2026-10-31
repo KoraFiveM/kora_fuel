@@ -5,12 +5,12 @@ local function getBalance(src, account)
 end
 
 local function askClient(src, name, ...)
-    return QB.callback.trigger(src, name, ...)
+    return Kora.callback.trigger(src, name, ...)
 end
 
 local function nearServicePoint(coords)
     for _, station in ipairs(Config.stations) do
-        if QB.distance.coords(coords, station, Config.serviceRadius) then return true end
+        if Kora.distance.coords(coords, station, Config.serviceRadius) then return true end
     end
     return false
 end
@@ -20,7 +20,7 @@ local function sendResult(src, ok, message)
 end
 
 local function vehicleFor(src, netId)
-    local vehicle, reason = QB.world.resolveNetworkEntity(src, netId, {
+    local vehicle, reason = Kora.world.resolveNetworkEntity(src, netId, {
         entityType = 'vehicle',
         maxDistance = Config.vehicleSearchDistance + 1.0,
     })
@@ -79,7 +79,7 @@ RegisterNetEvent('qbfuel:server:purchase', function(netId, account, quantity, cu
 
         info, reason = validate(src, netId, account, quantity, currentLevel)
         if not info then return sendResult(src, false, reason) end
-        QB.print.debug(netId, account, quantity, currentLevel, info)
+        Kora.print.debug(netId, account, quantity, currentLevel, info)
         local paid, payErr = exports.kora_core:removeMoney(src, account, info.price, ('%s vehicle %s'):format(info.kind, netId))
         if not paid then
             return sendResult(src, false, payErr == 'insufficient funds' and 'Insufficient funds.' or 'Payment could not be processed.')
