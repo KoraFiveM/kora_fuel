@@ -10,6 +10,9 @@ version '1.0.0'
 description 'Vehicle fuel and EV charging for the kora_lib test server'
 
 provide 'LegacyFuel'
+provide 'qb-fuel'
+provide 'ps-fuel'
+provide 'cdn-fuel'
 
 dependency 'kora_lib'
 dependency 'kora_core'

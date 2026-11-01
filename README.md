@@ -18,7 +18,8 @@ The HUD uses kora_fuel's EV classifier to render Charge rather than Fuel.
 
 ## LegacyFuel compatibility
 
-`LegacyFuel:GetFuel(vehicle)` and `LegacyFuel:SetFuel(vehicle, level)` use the
+`LegacyFuel`, `qb-fuel`, `ps-fuel` and `cdn-fuel` are provided with the same
+`GetFuel(vehicle)` and `SetFuel(vehicle, level)` exports, which use the
 same native vehicle fuel state. The legacy getter keeps fractional levels and
 the setter returns nil, while kora_fuel's existing exports keep their own return
 values. Invalid entities and non-finite legacy writes are ignored. The alias
