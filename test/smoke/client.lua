@@ -99,4 +99,20 @@ harness.test('LegacyFuel aliases preserve fractional reads and nil writes withou
     end
 end)
 
+harness.test('qb-fuel, ps-fuel and cdn-fuel share the LegacyFuel behaviour', function()
+    fuelLevel = 33.5
+    for _, res in ipairs({ 'qb-fuel', 'ps-fuel', 'cdn-fuel' }) do
+        local getFuel, setFuel
+        legacyEvents['__cfx_export_' .. res .. '_GetFuel'](function(fn) getFuel = fn end)
+        legacyEvents['__cfx_export_' .. res .. '_SetFuel'](function(fn) setFuel = fn end)
+        harness.assertEqual(getFuel(2), 33.5)
+        harness.assertEqual(setFuel(2, 12.5), nil)
+        harness.assertEqual(fuelLevel, 12.5)
+        harness.assertEqual(setFuel(2, 'bad'), nil)
+        harness.assertEqual(fuelLevel, 12.5)
+        harness.assertEqual(getFuel(0), nil)
+        fuelLevel = 33.5
+    end
+end)
+
 harness.report('qbfuel client')

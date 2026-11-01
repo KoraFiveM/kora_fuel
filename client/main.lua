@@ -42,17 +42,22 @@ local function setFuel(vehicle, level)
 end
 exports('SetFuel', setFuel)
 
--- Keep LegacyFuel's fractional reads and nil return while using native fuel state.
-Kora.compat.provideExport('LegacyFuel', 'GetFuel', function(vehicle)
+local function legacyGetFuel(vehicle)
     if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) or not IsEntityAVehicle(vehicle) then return end
     return GetVehicleFuelLevel(vehicle)
-end)
-Kora.compat.provideExport('LegacyFuel', 'SetFuel', function(vehicle, level)
+end
+local function legacySetFuel(vehicle, level)
     if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) or not IsEntityAVehicle(vehicle) then return end
     if type(level) ~= 'number' or level ~= level or math.abs(level) == math.huge then return end
     NetworkRequestControlOfEntity(vehicle)
     setFuel(vehicle, level)
-end)
+end
+
+-- Keep LegacyFuel's fractional reads and nil return while using native fuel state.
+for _, name in ipairs({ 'LegacyFuel', 'qb-fuel', 'ps-fuel', 'cdn-fuel' }) do
+    Kora.compat.provideExport(name, 'GetFuel', legacyGetFuel)
+    Kora.compat.provideExport(name, 'SetFuel', legacySetFuel)
+end
 
 local function nearServicePoint(coords)
     for _, station in ipairs(Config.stations) do
