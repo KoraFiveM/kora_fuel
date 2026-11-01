@@ -13,6 +13,9 @@ local function createBlips()
     local settings = Config.blips
     if not settings or not settings.enabled then return end
 
+    local placed = {}
+    local mergeRadius = (settings.mergeRadius or 0.0) + 0.0
+
     for index, station in ipairs(Config.stations) do
         local override = settings.perStation and settings.perStation[index] or {}
         local function pick(key)
@@ -20,7 +23,17 @@ local function createBlips()
             return settings[key]
         end
 
-        if override.enabled ~= false then
+        local duplicate = false
+        for _, other in ipairs(placed) do
+            local dx, dy = station.x - other.x, station.y - other.y
+            if dx * dx + dy * dy < mergeRadius * mergeRadius then
+                duplicate = true
+                break
+            end
+        end
+
+        if override.enabled ~= false and not duplicate then
+            placed[#placed + 1] = station
             local blip = AddBlipForCoord(station.x, station.y, station.z)
             SetBlipSprite(blip, pick('sprite'))
             SetBlipColour(blip, pick('colour'))

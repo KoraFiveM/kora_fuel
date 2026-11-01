@@ -37,7 +37,7 @@ dofile(repoRoot .. "client/blips.lua")
 
 harness.test("defaults create one configured blip per station", function()
     thread()
-    harness.assertEqual(count(), #Config.stations)
+    harness.assertEqual(count(), #Config.stations - 2)
     harness.assertEqual(blips[1].sprite, 361)
     harness.assertEqual(blips[1].colour, 1)
     harness.assertEqual(blips[1].scale, 0.6)
@@ -48,7 +48,7 @@ end)
 
 harness.test("resource stop removes every blip", function()
     stopHandler("other_resource")
-    harness.assertEqual(count(), #Config.stations)
+    harness.assertEqual(count(), #Config.stations - 2)
     stopHandler("kora_fuel")
     harness.assertEqual(count(), 0)
 end)
@@ -56,13 +56,22 @@ end)
 harness.test("per-station overrides apply and disable", function()
     Config.blips.perStation = { [2] = { enabled = false }, [3] = { label = "Custom", colour = 5 } }
     thread()
-    harness.assertEqual(count(), #Config.stations - 1)
+    harness.assertEqual(count(), #Config.stations - 3)
     local custom
     for _, b in pairs(blips) do
         if b.label == "Custom" then custom = b end
     end
     harness.assertEqual(custom.colour, 5)
     harness.assertEqual(custom.sprite, 361)
+    stopHandler("kora_fuel")
+end)
+
+harness.test("mergeRadius 0 draws a blip for every station", function()
+    Config.blips.perStation = {}
+    Config.blips.mergeRadius = 0
+    thread()
+    harness.assertEqual(count(), #Config.stations)
+    Config.blips.mergeRadius = 30.0
     stopHandler("kora_fuel")
 end)
 

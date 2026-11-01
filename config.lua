@@ -83,7 +83,10 @@ Config.stations = {
 -- Map blips for every entry in Config.stations (the list above is the only
 -- source of coordinates). Set enabled = false to hide them all. perStation is
 -- keyed by the 1-based index in Config.stations and may hold `enabled`,
--- `sprite`, `colour`, `scale`, `shortRange` or `label` overrides, e.g.
+-- `sprite`, `colour`, `scale`, `shortRange` or `label` overrides. Stations
+-- closer together than `mergeRadius` metres (the default list has forecourts
+-- listed twice for each side of a road) share one blip, drawn for the first
+-- of them; set it to 0 to draw one blip per entry. Example perStation:
 --   perStation = { [3] = { enabled = false }, [5] = { label = "Airfield Fuel" } }
 Config.blips = {
     enabled = true,
@@ -92,6 +95,7 @@ Config.blips = {
     scale = 0.6,
     shortRange = true,
     label = 'Gas Station',
+    mergeRadius = 30.0,
     perStation = {},
 }
 
@@ -219,6 +223,12 @@ if Kora and Kora.config and Kora.config.adopt then
     Config.blips.enabled = Kora.config.boolean(Config.blips.enabled, {
         label = 'Show gas station blips',
         description = 'Shows a map blip at every coordinate in the fuel station list. Turn this off if another resource already draws fuel station blips.',
+    })
+    Config.blips.mergeRadius = Kora.config.number(Config.blips.mergeRadius, {
+        min = 0.0,
+        step = 1.0,
+        label = 'Gas station blip merge radius',
+        description = 'Stations closer together than this many metres share a single map blip, so forecourts listed twice are not drawn as pairs. Set to 0 to draw a blip for every listed station.',
     })
     Config.blips.sprite = Kora.config.integer(Config.blips.sprite, {
         min = 0,

@@ -29,7 +29,9 @@ synchronization configuration.
 
 Every coordinate in `Config.stations` gets a map blip, configured by
 `Config.blips`: `enabled` (default `true`), `sprite` (361), `colour` (1),
-`scale` (0.6), `shortRange` (`true`) and `label` ("Gas Station"). Use
+`scale` (0.6), `shortRange` (`true`), `label` ("Gas Station") and
+`mergeRadius` (30.0 metres: stations closer than this share one blip, the first
+listed; 0 draws one blip per entry). Use
 `perStation = { [index] = { enabled = false, label = "..." } }` (index into
 `Config.stations`) to hide or restyle individual blips. Blips are removed when
 the resource stops.
