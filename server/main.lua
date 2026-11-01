@@ -1,13 +1,5 @@
 local busy = {}
 
-local function getBalance(src, account)
-    return exports.kora_core:getMoney(src, account)
-end
-
-local function askClient(src, name, ...)
-    return Kora.callback.trigger(src, name, ...)
-end
-
 local function nearServicePoint(coords)
     for _, station in ipairs(Config.stations) do
         if Kora.distance.coords(coords, station, Config.serviceRadius) then return true end
@@ -59,7 +51,7 @@ local function validate(src, netId, account, quantity, currentLevel)
     local kind = electric and 'charge' or 'fuel'
     local price = Fuel.price(kind, quantity)
 
-    local balance = tonumber(getBalance(src, account)) or 0
+    local balance = tonumber(exports.kora_core:getMoney(src, account)) or 0
     if balance < price then return nil, 'Insufficient funds.' end
 
     return { electric = electric, kind = kind, price = price }
@@ -74,7 +66,7 @@ RegisterNetEvent('qbfuel:server:purchase', function(netId, account, quantity, cu
         local info, reason = validate(src, netId, account, quantity, currentLevel)
         if not info then return sendResult(src, false, reason) end
 
-        local completed = askClient(src, 'qbfuel:runProgress', netId, Fuel.progressDuration(quantity), info.electric)
+        local completed = Kora.callback.trigger(src, 'qbfuel:runProgress', netId, Fuel.progressDuration(quantity), info.electric)
         if completed ~= true then return end
 
         info, reason = validate(src, netId, account, quantity, currentLevel)
