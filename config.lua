@@ -80,6 +80,21 @@ Config.stations = {
     vector3(1784.324, 3330.550, 41.253),
 }
 
+-- Map blips for every entry in Config.stations (the list above is the only
+-- source of coordinates). Set enabled = false to hide them all. perStation is
+-- keyed by the 1-based index in Config.stations and may hold `enabled`,
+-- `sprite`, `colour`, `scale`, `shortRange` or `label` overrides, e.g.
+--   perStation = { [3] = { enabled = false }, [5] = { label = "Airfield Fuel" } }
+Config.blips = {
+    enabled = true,
+    sprite = 361,
+    colour = 1,
+    scale = 0.6,
+    shortRange = true,
+    label = 'Gas Station',
+    perStation = {},
+}
+
 -- Registers this resource-owned configuration with kora_lib without changing its public Config table.
 if Kora and Kora.config and Kora.config.adopt then
     Config.maxLevel = Kora.config.number(Config.maxLevel, {
@@ -201,5 +216,34 @@ if Kora and Kora.config and Kora.config.adopt then
             label = 'Fuel station coordinates',
             description = 'Lists the world positions where the server permits paid refuelling or charging. The server checks these coordinates before taking payment, so this list is an authorization boundary as well as interaction data.',
         })
+    Config.blips.enabled = Kora.config.boolean(Config.blips.enabled, {
+        label = 'Show gas station blips',
+        description = 'Shows a map blip at every coordinate in the fuel station list. Turn this off if another resource already draws fuel station blips.',
+    })
+    Config.blips.sprite = Kora.config.integer(Config.blips.sprite, {
+        min = 0,
+        label = 'Gas station blip sprite',
+        description = 'Sets the GTA blip sprite ID used for gas stations. The default 361 is the petrol pump icon.',
+    })
+    Config.blips.colour = Kora.config.integer(Config.blips.colour, {
+        min = 0,
+        label = 'Gas station blip colour',
+        description = 'Sets the GTA blip colour ID used for gas stations. The default 1 is red.',
+    })
+    Config.blips.scale = Kora.config.number(Config.blips.scale, {
+        min = 0.1,
+        step = 0.1,
+        label = 'Gas station blip scale',
+        description = 'Sets the size of gas station blips on the map. Values around 0.6 keep them unobtrusive.',
+    })
+    Config.blips.shortRange = Kora.config.boolean(Config.blips.shortRange, {
+        label = 'Short-range gas station blips',
+        description = 'When enabled, blips only show near the player or on the full map instead of across the whole minimap.',
+    })
+    Config.blips.label = Kora.config.string(Config.blips.label, {
+        minLength = 1,
+        label = 'Gas station blip label',
+        description = 'Sets the text shown for gas station blips on the map legend.',
+    })
     Config = Kora.config.adopt(Config)
 end

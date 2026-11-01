@@ -22,5 +22,8 @@ shared_scripts {
     'shared/fuel.lua',
 }
 
-client_script 'client/main.lua'
+client_scripts {
+    'client/main.lua',
+    'client/blips.lua',
+}
 server_script 'server/main.lua'

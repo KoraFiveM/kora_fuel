@@ -24,3 +24,12 @@ the setter returns nil, while kora_fuel's existing exports keep their own return
 values. Invalid entities and non-finite legacy writes are ignored. The alias
 covers these exports; it does not reproduce qb-fuel's UI or optional state-bag
 synchronization configuration.
+
+## Map blips
+
+Every coordinate in `Config.stations` gets a map blip, configured by
+`Config.blips`: `enabled` (default `true`), `sprite` (361), `colour` (1),
+`scale` (0.6), `shortRange` (`true`) and `label` ("Gas Station"). Use
+`perStation = { [index] = { enabled = false, label = "..." } }` (index into
+`Config.stations`) to hide or restyle individual blips. Blips are removed when
+the resource stops.
