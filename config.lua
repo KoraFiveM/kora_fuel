@@ -44,13 +44,25 @@ Config.consumePerSecond = {
     [20] = 0.080, -- commercial
 }
 
--- GTA's electric models. Add addon EV spawn names here; the model check is
--- shared by the server, fuel drain, and HUD, so every part stays in agreement.
+-- GTA's electric models. This is the single source of truth: the server
+-- (pricing/validation), pump wording and the HUD (via the isElectricVehicle
+-- export) all read it. Add addon EV spawn names here. Models released in
+-- newer GTA builds are also picked up by Config.electric.useNative below, so
+-- this list only has to cover addons and older game builds.
 Config.electricVehicles = {
-    'airtug', 'caddy', 'caddy2', 'caddy3', 'cyclone', 'cyclone2',
-    'dilettante', 'dilettante2', 'imorgon', 'iwagen', 'khamelion',
-    'neon', 'omnisegt', 'powersurge', 'raiden', 'rcbandito', 'surge',
-    'tezeract', 'voltic', 'voltic2',
+    'airtug', 'buffalo5', 'caddy', 'caddy2', 'caddy3', 'coureur', 'cyclone',
+    'cyclone2', 'dilettante', 'dilettante2', 'envisage', 'estride', 'imorgon',
+    'inductor', 'inductor2', 'iwagen', 'khamelion', 'neon', 'omnisegt',
+    'pipistrello', 'powersurge', 'raiden', 'rcbandito', 'surge', 'suzume',
+    'tezeract', 'virtue', 'vivanite2', 'voltic', 'voltic2', 'xtreme',
+}
+
+Config.electric = {
+    -- Also ask the game (GetIsVehicleElectric) whether a vehicle is electric,
+    -- on the client, once per vehicle model. Affects the HUD icon and the
+    -- "Charge vehicle" pump wording only; server pricing and validation stay
+    -- on Config.electricVehicles. Ignored on game builds without the native.
+    useNative = true,
 }
 
 -- Pump models cover the standard GTA petrol forecourts. Their interaction
@@ -210,6 +222,10 @@ if Kora and Kora.config and Kora.config.adopt then
             label = 'Electric vehicle models',
             description = 'Lists GTA and add-on vehicle spawn names that use battery charge rather than petrol. The same list controls pump wording, server-side service validation, fuel drain, and the HUD fuel presentation.',
         })
+    Config.electric.useNative = Kora.config.boolean(Config.electric.useNative, {
+        label = 'Detect electric vehicles with the game native',
+        description = 'Also asks the game whether a vehicle is electric, so new GTA electric models show the charge icon and Charge vehicle pump wording without being listed. Pricing and server validation still use the electric vehicle model list. Has no effect on game builds without the native.',
+    })
     Config.pumpModels = Kora.config.list(Config.pumpModels,
         Kora.config.string('', { minLength = 1 }), {
             label = 'Fuel pump models',

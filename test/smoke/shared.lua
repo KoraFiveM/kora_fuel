@@ -21,6 +21,18 @@ harness.test('electric-model classification includes stock EVs and excludes petr
     harness.assertTrue(Fuel.isElectricModel(joaat('raiden')), 'hashed electric models should work')
 end)
 
+harness.test('electric list covers newer EVs and has no duplicates', function()
+    for _, m in ipairs({ 'envisage', 'virtue', 'coureur', 'buffalo5', 'inductor2', 'estride', 'cyclone2' }) do
+        harness.assertTrue(Fuel.isElectricModel(m), m .. ' should be electric')
+    end
+    local seen = {}
+    for _, m in ipairs(Config.electricVehicles) do
+        harness.assertFalse(seen[m] == true, m .. ' listed twice')
+        seen[m] = true
+    end
+    harness.assertTrue(Config.electric.useNative, 'native detection defaults on')
+end)
+
 harness.test('fuel level is clamped to the native 0-100 range', function()
     harness.assertEqual(Fuel.clampLevel(-5), 0)
     harness.assertEqual(Fuel.clampLevel(150), Config.maxLevel)

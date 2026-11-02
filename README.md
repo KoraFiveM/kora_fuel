@@ -6,7 +6,7 @@ Fuel and charge share GTA's 0–100 native vehicle fuel level. This is deliberat
 the HUD, kora_garages, and vehicle streaming all see the same level, and a stored
 vehicle already persists that level through the existing `player_vehicles.fuel`
 column. At the default vanilla station pumps, EVs offer a charging flow instead
-of refuelling. Add addon EV spawn names to `Config.electricVehicles`.
+of refuelling. Add addon EV spawn names to `Config.electricVehicles` (the single source of truth, also read by kora_hud through the `isElectricVehicle` export). `Config.electric.useNative` (default true) additionally asks the game via `GetIsVehicleElectric` on the client, once per model, for the HUD icon and pump wording; pricing stays on the list.
 
 Client exports: `GetFuel(vehicle)`, `SetFuel(vehicle, level)`, and
 `isElectricVehicle(vehicle)`.

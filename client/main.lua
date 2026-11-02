@@ -2,12 +2,34 @@ local function notify(message, kind)
     Kora.notify.send({ title = 'Fuel', message = message, type = kind or 'info' })
 end
 
+-- GetIsVehicleElectric is missing on older game builds, so every call is
+-- guarded. Results are memoised per model: the answer never changes for a model.
+local nativeElectric = {}
+
+local function isNativeElectric(vehicle)
+    if not Config.electric or not Config.electric.useNative then return false end
+    local model = GetEntityModel(vehicle)
+    local known = nativeElectric[model]
+    if known == nil then
+        local ok, result = pcall(GetIsVehicleElectric, vehicle)
+        known = ok and result == true
+        nativeElectric[model] = known
+    end
+    return known
+end
+
 ---@param vehicle integer
 ---@return boolean
 local function isElectricVehicle(vehicle)
-    return vehicle and vehicle ~= 0 and DoesEntityExist(vehicle)
-        and Fuel.isElectricModel(GetEntityModel(vehicle)) or false
+    if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) then return false end
+    return Fuel.isElectricModel(GetEntityModel(vehicle)) or isNativeElectric(vehicle)
 end
+
+-- Resolve the native once when the player gets in, so the HUD's first sample
+-- and the pump menu never pay for it.
+Kora.cache.onChange('vehicle', function(vehicle)
+    if vehicle and vehicle ~= 0 and DoesEntityExist(vehicle) then isNativeElectric(vehicle) end
+end)
 
 exports('isElectricVehicle', isElectricVehicle)
 
@@ -210,7 +232,8 @@ local function openFuelMenu()
     if capacity < 1 then return notify('Vehicle is already full.', 'info') end
 
     local electric = isElectricVehicle(vehicle)
-    local kind = electric and 'charge' or 'fuel'
+    -- Price kind follows the server-side model list so the quote matches the charge.
+    local kind = Fuel.isElectricModel(GetEntityModel(vehicle)) and 'charge' or 'fuel'
     local netId = NetworkGetNetworkIdFromEntity(vehicle)
 
     Kora.nui.registerApp(buildApp({
