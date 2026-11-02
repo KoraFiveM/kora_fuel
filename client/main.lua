@@ -266,21 +266,47 @@ RegisterNetEvent('qbfuel:client:serviceResult', function(ok, message)
     notify(message or 'Unable to service that vehicle.', ok and 'success' or 'error')
 end)
 
-CreateThread(function()
-    while true do
-        Wait(Config.consumeInterval)
+-- Consumption only matters while the local player drives a vehicle, so the
+-- worker starts when the cached vehicle/seat make that true and exits as soon
+-- as they stop doing so. On foot (or as a passenger) nothing runs at all.
+local drivenVehicle, drivenSeat = Kora.cache.vehicle(), Kora.cache.seat()
+local consuming = false
 
-        local vehicle = Kora.cache.vehicle()
-        if vehicle and Kora.cache.seat() == -1 and GetIsVehicleEngineRunning(vehicle) then
-            local level = rawLevel(vehicle)
-            if level <= 0 then
-                SetVehicleEngineOn(vehicle, false, true, true)
-            else
-                local used = Fuel.calculateConsumption(GetVehicleClass(vehicle), GetEntitySpeed(vehicle), Config.consumeInterval)
-                local nextLevel = Fuel.clampLevel(level - used)
-                SetVehicleFuelLevel(vehicle, nextLevel)
-                if nextLevel <= 0 then SetVehicleEngineOn(vehicle, false, true, true) end
-            end
-        end
+local function consumeTick(vehicle)
+    if not GetIsVehicleEngineRunning(vehicle) then return end
+
+    local level = rawLevel(vehicle)
+    if level <= 0 then
+        SetVehicleEngineOn(vehicle, false, true, true)
+    else
+        local used = Fuel.calculateConsumption(GetVehicleClass(vehicle), GetEntitySpeed(vehicle), Config.consumeInterval)
+        local nextLevel = Fuel.clampLevel(level - used)
+        SetVehicleFuelLevel(vehicle, nextLevel)
+        if nextLevel <= 0 then SetVehicleEngineOn(vehicle, false, true, true) end
     end
+end
+
+local function startConsuming()
+    if consuming or not drivenVehicle or drivenSeat ~= -1 then return end
+    consuming = true
+    CreateThread(function()
+        while true do
+            Wait(Config.consumeInterval)
+            if not drivenVehicle or drivenSeat ~= -1 then break end
+            consumeTick(drivenVehicle)
+        end
+        consuming = false
+    end)
+end
+
+Kora.cache.onChange('vehicle', function(vehicle)
+    drivenVehicle = vehicle
+    startConsuming()
 end)
+
+Kora.cache.onChange('seat', function(seat)
+    drivenSeat = seat
+    startConsuming()
+end)
+
+startConsuming()

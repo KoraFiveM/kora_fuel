@@ -10,13 +10,32 @@ local nativeExports, legacyEvents = {}, {}
 exports = function(name, fn) nativeExports[name] = fn end
 AddEventHandler = function(name, fn) legacyEvents[name] = fn end
 RegisterNetEvent = function() end
-CreateThread = function() end
+-- Minimal scheduler: each thread is a coroutine, Wait yields, advance() resumes them once.
+local threads, cacheState, cacheHandlers = {}, { vehicle = false, seat = false }, {}
+CreateThread = function(fn) threads[#threads + 1] = coroutine.create(fn) end
+Wait = function() coroutine.yield() end
+local function advance()
+    for i = #threads, 1, -1 do
+        local ok, err = coroutine.resume(threads[i])
+        if not ok then error(err, 0) end
+        if coroutine.status(threads[i]) == 'dead' then table.remove(threads, i) end
+    end
+end
+local function setCache(key, value)
+    local old = cacheState[key]
+    cacheState[key] = value
+    for _, fn in ipairs(cacheHandlers[key] or {}) do fn(value, old) end
+end
 PlayerPedId = function() return 1 end
 -- Stand in for FiveM vector subtraction; the vehicle is parked at the pump.
 GetEntityCoords = function() return setmetatable({}, { __sub = function() return '' end }) end
 DoesEntityExist = function() return true end
-GetIsVehicleEngineRunning = function() return false end
+local engineOn, engineOff = false, 0
+GetIsVehicleEngineRunning = function() return engineOn end
 local fuelLevel, controlRequested = 60, nil
+GetVehicleClass = function() return 1 end
+GetEntitySpeed = function() return 20.0 end
+SetVehicleEngineOn = function() engineOff = engineOff + 1 end
 GetVehicleFuelLevel = function() return fuelLevel end
 SetVehicleFuelLevel = function(_, level) fuelLevel = level end
 NetworkRequestControlOfEntity = function(vehicle) controlRequested = vehicle end
@@ -31,6 +50,14 @@ Kora = {
     closest = { vehicle = function() return { id = 2 } end },
     interact = { addModel = function(_, options) openMenu = options[1].action end },
     callback = { register = function() end },
+    cache = {
+        vehicle = function() return cacheState.vehicle end,
+        seat = function() return cacheState.seat end,
+        onChange = function(key, fn)
+            cacheHandlers[key] = cacheHandlers[key] or {}
+            table.insert(cacheHandlers[key], fn)
+        end,
+    },
     nui = {
         registerApp = function(definition) app = definition end,
         openApp = function(_, options) openData = options.data end,
@@ -113,6 +140,45 @@ harness.test('qb-fuel, ps-fuel and cdn-fuel share the LegacyFuel behaviour', fun
         harness.assertEqual(getFuel(0), nil)
         fuelLevel = 33.5
     end
+end)
+
+harness.test('fuel consumption only runs while driving and starts and stops on cache changes', function()
+    harness.assertEqual(#threads, 0, 'no worker may exist on foot')
+    setCache('vehicle', 2)
+    harness.assertEqual(#threads, 0, 'a vehicle without the driver seat must not start the worker')
+    setCache('seat', 0)
+    harness.assertEqual(#threads, 0)
+    setCache('seat', -1)
+    harness.assertEqual(#threads, 1, 'driving starts exactly one worker')
+    setCache('vehicle', 3)
+    setCache('seat', -1)
+    harness.assertEqual(#threads, 1, 'repeated changes must not stack workers')
+
+    advance() -- run the new worker up to its first Wait
+    fuelLevel, engineOn = 60, false
+    advance()
+    harness.assertEqual(fuelLevel, 60, 'engine off consumes nothing')
+    engineOn = true
+    advance()
+    harness.assertTrue(fuelLevel < 60, 'engine running consumes fuel')
+
+    fuelLevel = 0
+    advance()
+    harness.assertEqual(engineOff, 1, 'empty tank cuts the engine')
+
+    setCache('seat', 1)
+    advance()
+    harness.assertEqual(#threads, 0, 'worker exits once the player is no longer the driver')
+    fuelLevel = 60
+    advance()
+    harness.assertEqual(fuelLevel, 60, 'no consumption after leaving the driver seat')
+
+    setCache('seat', -1)
+    harness.assertEqual(#threads, 1, 'worker restarts when driving again')
+    setCache('vehicle', false)
+    advance() -- first Wait
+    advance()
+    harness.assertEqual(#threads, 0, 'worker exits when leaving the vehicle')
 end)
 
 harness.report('qbfuel client')
