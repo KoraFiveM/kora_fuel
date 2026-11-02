@@ -266,21 +266,66 @@ RegisterNetEvent('qbfuel:client:serviceResult', function(ok, message)
     notify(message or 'Unable to service that vehicle.', ok and 'success' or 'error')
 end)
 
-CreateThread(function()
-    while true do
-        Wait(Config.consumeInterval)
+-- Consumption only happens while driving, so instead of a session-long poll
+-- the worker is started by kora_lib's cache seat/vehicle change events when the
+-- player becomes the driver and ends when they stop being the driver. 'seat'
+-- is refreshed before 'vehicle', so on entry the vehicle edge starts it and on
+-- exit the seat edge already stops it. A generation token keeps it to one worker.
+local cachedVehicle, cachedSeat = false, false
+local consumeGeneration, consuming = 0, false
 
-        local vehicle = Kora.cache.vehicle()
-        if vehicle and Kora.cache.seat() == -1 and GetIsVehicleEngineRunning(vehicle) then
-            local level = rawLevel(vehicle)
-            if level <= 0 then
-                SetVehicleEngineOn(vehicle, false, true, true)
-            else
-                local used = Fuel.calculateConsumption(GetVehicleClass(vehicle), GetEntitySpeed(vehicle), Config.consumeInterval)
-                local nextLevel = Fuel.clampLevel(level - used)
-                SetVehicleFuelLevel(vehicle, nextLevel)
-                if nextLevel <= 0 then SetVehicleEngineOn(vehicle, false, true, true) end
+local function startConsumption()
+    consumeGeneration = consumeGeneration + 1
+    local generation = consumeGeneration
+    CreateThread(function()
+        while generation == consumeGeneration do
+            Wait(Config.consumeInterval)
+            if generation ~= consumeGeneration then return end
+
+            local vehicle = Kora.cache.vehicle()
+            if vehicle and Kora.cache.seat() == -1 and GetIsVehicleEngineRunning(vehicle) then
+                local level = rawLevel(vehicle)
+                if level <= 0 then
+                    SetVehicleEngineOn(vehicle, false, true, true)
+                else
+                    local used = Fuel.calculateConsumption(GetVehicleClass(vehicle), GetEntitySpeed(vehicle), Config.consumeInterval)
+                    local nextLevel = Fuel.clampLevel(level - used)
+                    SetVehicleFuelLevel(vehicle, nextLevel)
+                    if nextLevel <= 0 then SetVehicleEngineOn(vehicle, false, true, true) end
+                end
             end
         end
+    end)
+end
+
+local function updateDriving()
+    local driving = cachedVehicle ~= false and cachedVehicle ~= nil and cachedSeat == -1
+    if driving == consuming then return end
+    consuming = driving
+    if driving then
+        startConsumption()
+    else
+        consumeGeneration = consumeGeneration + 1 -- the running worker exits on its next wake
     end
+end
+
+-- kora_lib drops onChange listeners when it restarts: re-register and seed from
+-- the current values (onChange never reports them), at load and on every restart.
+local function watchDriving()
+    Kora.cache.onChange('seat', function(seat)
+        cachedSeat = seat
+        updateDriving()
+    end)
+    Kora.cache.onChange('vehicle', function(vehicle)
+        cachedVehicle = vehicle
+        updateDriving()
+    end)
+    cachedSeat = Kora.cache.seat()
+    cachedVehicle = Kora.cache.vehicle()
+    updateDriving()
+end
+
+watchDriving()
+AddEventHandler('onClientResourceStart', function(resource)
+    if resource == 'kora_lib' then watchDriving() end
 end)

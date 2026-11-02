@@ -26,11 +26,17 @@ local model = 'adder'
 GetEntityModel = function() return model end
 
 local openMenu, app, openData, purchase
+local cacheHandlers, cacheVehicle, cacheSeat = {}, false, false
 Kora = {
     notify = { send = function() error('Unexpected notification') end },
     closest = { vehicle = function() return { id = 2 } end },
     interact = { addModel = function(_, options) openMenu = options[1].action end },
     callback = { register = function() end },
+    cache = {
+        onChange = function(key, fn) cacheHandlers[key] = cacheHandlers[key] or {}; table.insert(cacheHandlers[key], fn) end,
+        vehicle = function() return cacheVehicle end,
+        seat = function() return cacheSeat end,
+    },
     nui = {
         registerApp = function(definition) app = definition end,
         openApp = function(_, options) openData = options.data end,
@@ -113,6 +119,44 @@ harness.test('qb-fuel, ps-fuel and cdn-fuel share the LegacyFuel behaviour', fun
         harness.assertEqual(getFuel(0), nil)
         fuelLevel = 33.5
     end
+end)
+
+harness.test('consumption runs only while driving, one worker, and follows kora_lib restarts', function()
+    local threads = {}
+    local savedThread, savedWait = CreateThread, Wait
+    CreateThread = function(fn) threads[#threads + 1] = coroutine.create(fn) end
+    Wait = function(ms) coroutine.yield(ms) end
+    local function change(key, value)
+        if key == 'vehicle' then cacheVehicle = value else cacheSeat = value end
+        for _, fn in ipairs(cacheHandlers[key]) do fn(value) end
+    end
+    harness.assertEqual(#threads, 0, 'no consumption poll on foot')
+    change('seat', 0); change('vehicle', 2)
+    harness.assertEqual(#threads, 0, 'passengers burn no fuel and start no worker')
+    change('seat', -1)
+    harness.assertEqual(#threads, 1, 'becoming the driver starts the worker')
+    local running, used = true, nil
+    GetIsVehicleEngineRunning = function() return running end
+    GetVehicleClass = function() return 0 end
+    GetEntitySpeed = function() return 20 end
+    SetVehicleEngineOn = function() end
+    fuelLevel = 50
+    local _, ms = coroutine.resume(threads[1])
+    harness.assertEqual(ms, Config.consumeInterval, 'worker sleeps the consume interval first')
+    coroutine.resume(threads[1])
+    harness.assertTrue(fuelLevel < 50, 'driving with the engine on consumes fuel')
+    used = fuelLevel
+    change('seat', false)
+    coroutine.resume(threads[1])
+    harness.assertEqual(coroutine.status(threads[1]), 'dead', 'leaving the driver seat ends the worker')
+    harness.assertEqual(fuelLevel, used, 'no consumption after leaving')
+    change('vehicle', false)
+    change('seat', -1); change('vehicle', 2)
+    harness.assertEqual(#threads, 2, 'entering as driver starts one fresh worker')
+    legacyEvents.onClientResourceStart('kora_lib')
+    harness.assertEqual(#threads, 2, 're-seeding while still driving never duplicates the worker')
+    harness.assertEqual(#cacheHandlers.vehicle, 2, 'kora_lib restart re-registers the listeners')
+    CreateThread, Wait, GetIsVehicleEngineRunning = savedThread, savedWait, function() return false end
 end)
 
 harness.report('qbfuel client')
