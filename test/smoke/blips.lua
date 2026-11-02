@@ -5,6 +5,7 @@ package.path = testDir .. "?.lua;" .. package.path
 local harness = require("harness")
 
 vector3 = function(x, y, z) return { x = x, y = y, z = z } end
+joaat = function(model) return model end
 local thread, stopHandler
 CreateThread = function(fn) thread = fn end
 AddEventHandler = function(name, fn) if name == "onResourceStop" then stopHandler = fn end end
@@ -33,28 +34,52 @@ local function count()
 end
 
 dofile(repoRoot .. "config.lua")
+dofile(repoRoot .. "shared/fuel.lua")
 dofile(repoRoot .. "client/blips.lua")
 
-harness.test("defaults create one configured blip per station", function()
+local chargers = #Config.charging.stations
+
+-- Charging station blips are created first, so gas station blips follow them.
+harness.test("defaults create one configured blip per gas station and charging station", function()
+    thread()
+    harness.assertEqual(count(), #Config.stations - 2 + chargers)
+    local gas = blips[chargers + 1]
+    harness.assertEqual(gas.sprite, 361)
+    harness.assertEqual(gas.colour, 1)
+    harness.assertEqual(gas.scale, 0.6)
+    harness.assertTrue(gas.shortRange)
+    harness.assertEqual(gas.label, "Gas Station")
+    harness.assertEqual(gas.x, Config.stations[1].x)
+end)
+
+harness.test("charging station blips use Config.charging.blips and can be turned off", function()
+    local ev = blips[1]
+    harness.assertEqual(ev.label, "EV Charging Station")
+    harness.assertEqual(ev.colour, Config.charging.blips.colour)
+    harness.assertEqual(ev.sprite, Config.charging.blips.sprite)
+    harness.assertEqual(ev.x, Config.charging.stations[1].coords.x)
+    Config.charging.blips.enabled = false
     thread()
     harness.assertEqual(count(), #Config.stations - 2)
-    harness.assertEqual(blips[1].sprite, 361)
-    harness.assertEqual(blips[1].colour, 1)
-    harness.assertEqual(blips[1].scale, 0.6)
-    harness.assertTrue(blips[1].shortRange)
-    harness.assertEqual(blips[1].label, "Gas Station")
-    harness.assertEqual(blips[1].x, Config.stations[1].x)
+    Config.charging.blips.enabled = true
+    Config.charging.enabled = false
+    thread()
+    harness.assertEqual(count(), #Config.stations - 2, "no charging network, no charging blips")
+    Config.charging.enabled = true
+    thread()
+    harness.assertEqual(count(), #Config.stations - 2 + chargers)
 end)
 
 harness.test("resource stop removes every blip", function()
     stopHandler("other_resource")
-    harness.assertEqual(count(), #Config.stations - 2)
+    harness.assertEqual(count(), #Config.stations - 2 + chargers)
     stopHandler("kora_fuel")
     harness.assertEqual(count(), 0)
 end)
 
 harness.test("per-station overrides apply and disable", function()
     Config.blips.perStation = { [2] = { enabled = false }, [3] = { label = "Custom", colour = 5 } }
+    Config.charging.blips.enabled = false
     thread()
     harness.assertEqual(count(), #Config.stations - 3)
     local custom
@@ -69,6 +94,7 @@ end)
 harness.test("mergeRadius 0 draws a blip for every station", function()
     Config.blips.perStation = {}
     Config.blips.mergeRadius = 0
+    Config.charging.blips.enabled = false
     thread()
     harness.assertEqual(count(), #Config.stations)
     Config.blips.mergeRadius = 30.0

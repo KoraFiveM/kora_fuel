@@ -63,4 +63,58 @@ harness.test('only configured payment accounts are accepted', function()
     harness.assertFalse(Fuel.isPaymentAccount('crypto'))
 end)
 
+harness.test('default charging stations are labelled, unique and carry usable coordinates', function()
+    harness.assertTrue(Fuel.chargingEnabled())
+    harness.assertTrue(#Config.charging.stations >= 5, 'a handful of stations is expected')
+    local seen = {}
+    for _, station in ipairs(Config.charging.stations) do
+        harness.assertTrue(type(station.label) == 'string' and #station.label > 0, 'station needs a label')
+        harness.assertFalse(seen[station.label] == true, station.label .. ' listed twice')
+        seen[station.label] = true
+        for _, axis in ipairs({ 'x', 'y', 'z' }) do
+            harness.assertTrue(type(station.coords[axis]) == 'number', station.label .. ' needs numeric ' .. axis)
+        end
+    end
+end)
+
+harness.test('nearestCharger honours the maximum distance', function()
+    local first = Config.charging.stations[1]
+    local at = { x = first.coords.x + 3.0, y = first.coords.y, z = first.coords.z }
+    local station, distance = Fuel.nearestCharger(at, Config.charging.serviceRadius)
+    harness.assertEqual(station, first)
+    harness.assertTrue(math.abs(distance - 3.0) < 1e-6)
+    local far = { x = 99999.0, y = 99999.0, z = 0.0 }
+    harness.assertEqual(Fuel.nearestCharger(far, Config.charging.serviceRadius), nil)
+    harness.assertTrue(Fuel.nearestCharger(far) ~= nil, 'without a limit the nearest station is still reported')
+end)
+
+harness.test('pumps refuse EVs only while a charging network is enabled and pumps are not allowed', function()
+    harness.assertFalse(Fuel.pumpsAcceptElectric(), 'default: EVs are sent to charging stations')
+    Config.charging.allowAtPumps = true
+    harness.assertTrue(Fuel.pumpsAcceptElectric())
+    Config.charging.allowAtPumps = false
+    Config.charging.enabled = false
+    harness.assertTrue(Fuel.pumpsAcceptElectric(), 'no network, pumps keep charging')
+    Config.charging.enabled = true
+    local stations = Config.charging.stations
+    Config.charging.stations = {}
+    harness.assertTrue(Fuel.pumpsAcceptElectric(), 'no stations listed, pumps keep charging')
+    Config.charging.stations = stations
+end)
+
+harness.test('charging stations use their own price and rate; pumps and petrol are unchanged', function()
+    local saved = { Config.charging.pricePerPercent, Config.charging.secondsPerPercent }
+    Config.charging.pricePerPercent, Config.charging.secondsPerPercent = 2.0, 0.5
+    harness.assertEqual(Fuel.price('charge', 40, 'charger'), 80)
+    harness.assertEqual(Fuel.price('charge', 40, 'pump'), math.ceil(40 * Config.pricePerUnit.charge))
+    harness.assertEqual(Fuel.price('charge', 40), math.ceil(40 * Config.pricePerUnit.charge))
+    harness.assertEqual(Fuel.price('fuel', 40, 'charger'), math.ceil(40 * Config.pricePerUnit.fuel))
+    harness.assertEqual(Fuel.unitPrice('charge', 'charger'), 2.0)
+    harness.assertEqual(Fuel.progressDuration(40, 'charge', 'charger'), 20000)
+    harness.assertEqual(Fuel.progressDuration(40, 'charge', 'pump'), 40 * Config.progressMsPerUnit)
+    harness.assertEqual(Fuel.progressDuration(40), 40 * Config.progressMsPerUnit)
+    harness.assertEqual(Fuel.progressDuration(1, 'charge', 'charger'), Config.minimumProgressMs, 'minimum duration still applies')
+    Config.charging.pricePerPercent, Config.charging.secondsPerPercent = saved[1], saved[2]
+end)
+
 harness.report('qbfuel shared')

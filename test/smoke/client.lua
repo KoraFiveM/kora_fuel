@@ -7,7 +7,10 @@ local harness = require('harness')
 vector3 = function(x, y, z) return { x = x, y = y, z = z } end
 joaat = function(model) return model end
 local nativeExports, legacyEvents = {}, {}
-exports = function(name, fn) nativeExports[name] = fn end
+local zones = {}
+exports = setmetatable({
+    kora_target = { addSphereZone = function(_, zone) zones[#zones + 1] = zone end },
+}, { __call = function(_, name, fn) nativeExports[name] = fn end })
 AddEventHandler = function(name, fn) legacyEvents[name] = fn end
 RegisterNetEvent = function() end
 -- Minimal scheduler: each thread is a coroutine, Wait yields, advance() resumes them once.
@@ -28,7 +31,12 @@ local function setCache(key, value)
 end
 PlayerPedId = function() return 1 end
 -- Stand in for FiveM vector subtraction; the vehicle is parked at the pump.
-GetEntityCoords = function() return setmetatable({}, { __sub = function() return '' end }) end
+local pedPos = { x = 0.0, y = 0.0, z = 0.0 }
+GetEntityCoords = function()
+    return setmetatable({ x = pedPos.x, y = pedPos.y, z = pedPos.z }, { __sub = function() return '' end })
+end
+local clock = 0
+GetGameTimer = function() return clock end
 DoesEntityExist = function() return true end
 local engineOn, engineOff = false, 0
 GetIsVehicleEngineRunning = function() return engineOn end
@@ -45,12 +53,14 @@ local model = 'adder'
 GetEntityModel = function() return model end
 
 local openMenu, app, openData, purchase
+local notices, vehicleScans = {}, 0
 Kora = {
-    notify = { send = function() error('Unexpected notification') end },
-    closest = { vehicle = function() return { id = 2 } end },
+    notify = { send = function(notice) notices[#notices + 1] = notice end },
+    closest = { vehicle = function() vehicleScans = vehicleScans + 1 return { id = 2 } end },
     interact = { addModel = function(_, options) openMenu = options[1].action end },
     callback = { register = function() end },
     cache = {
+        ped = function() return 1 end,
         vehicle = function() return cacheState.vehicle end,
         seat = function() return cacheState.seat end,
         onChange = function(key, fn)
@@ -71,16 +81,29 @@ dofile(repoRoot .. 'config.lua')
 dofile(repoRoot .. 'shared/fuel.lua')
 dofile(repoRoot .. 'client/main.lua')
 
+local stationOne = Config.charging.stations[1].coords
+local function standAtCharger() pedPos = { x = stationOne.x, y = stationOne.y, z = stationOne.z } end
+local function openCharger() zones[1].options[1].onSelect() end
+
 harness.test('fuel and charging totals track the selected amount without purchasing', function()
-    for _, kind in ipairs({ 'fuel', 'charge' }) do
-        model = kind == 'charge' and 'neon' or 'adder'
-        openMenu()
+    local cases = {
+        { kind = 'fuel', site = 'pump', model = 'adder' },
+        { kind = 'charge', site = 'charger', model = 'neon' },
+        { kind = 'charge', site = 'pump', model = 'neon', allowAtPumps = true },
+    }
+    for _, case in ipairs(cases) do
+        local kind, site = case.kind, case.site
+        model = case.model
+        Config.charging.allowAtPumps = case.allowAtPumps == true
+        standAtCharger()
+        if site == 'charger' then openCharger() else openMenu() end
+        harness.assertEqual(openData.site, site)
         local total = app.navigation[1].content.blocks[2].items[2]
         harness.assertEqual(total.label, 'Total Price')
-        harness.assertEqual(total.value, ('$%d'):format(Fuel.price(kind, 40)))
+        harness.assertEqual(total.value, ('$%d'):format(Fuel.price(kind, 40, site)))
         local update = app.onChange('fuel-submit', { value = { quantity = 7, account = 'bank' } })
         harness.assertEqual(update.navigation[1].content.blocks[2].items[2].value,
-            ('$%d'):format(Fuel.price(kind, 7)))
+            ('$%d'):format(Fuel.price(kind, 7, site)))
         harness.assertEqual(total.description, '7 units')
         harness.assertEqual(purchase, nil, 'an edit must not trigger a purchase')
         for _, invalid in ipairs({ '', 0, 41, 1.5, math.huge, 0 / 0 }) do
@@ -88,6 +111,8 @@ harness.test('fuel and charging totals track the selected amount without purchas
         end
         harness.assertEqual(total.description, '7 units', 'invalid edits must leave the total alone')
     end
+    harness.assertEqual(#notices, 0, 'no refusal or error is shown for valid services')
+    Config.charging.allowAtPumps = false
 end)
 
 harness.test('submitting still sends the quantity and account to the existing purchase event', function()
@@ -98,6 +123,95 @@ harness.test('submitting still sends the quantity and account to the existing pu
     harness.assertEqual(purchase[3], 'bank')
     harness.assertEqual(purchase[4], 7)
     harness.assertEqual(purchase[5], 60)
+    harness.assertEqual(purchase[6], 'pump')
+end)
+
+harness.test('the charging menu shows the station, uses station pricing and sends the charger site', function()
+    local saved = Config.charging.pricePerPercent
+    Config.charging.pricePerPercent = 3.0
+    model = 'neon'
+    standAtCharger()
+    openCharger()
+    harness.assertEqual(app.title, 'Charge vehicle')
+    harness.assertEqual(app.description, 'Battery charge - ' .. Config.charging.stations[1].label)
+    harness.assertEqual(app.navigation[1].content.blocks[2].items[1].value, '$3.00')
+    harness.assertEqual(app.navigation[1].content.blocks[2].items[2].value, '$120')
+    app.onAction('fuel-submit', { data = openData, value = { quantity = 7, account = 'cash' } })
+    harness.assertEqual(purchase[6], 'charger')
+    Config.charging.pricePerPercent = saved
+end)
+
+harness.test('petrol pumps send EVs to the nearest charging station instead of opening a menu', function()
+    model = 'neon'
+    app, notices = nil, {}
+    local at = Config.charging.stations[2].coords
+    pedPos = { x = at.x + 100.0, y = at.y, z = at.z }
+    openMenu()
+    harness.assertEqual(app, nil, 'no charge menu at a petrol pump')
+    harness.assertEqual(#notices, 1)
+    harness.assertEqual(notices[1].message, Config.charging.pumpMessage .. ' Nearest: ' ..
+        Config.charging.stations[2].label .. ' (100 m).')
+
+    Config.charging.pumpMessage = 'Use a charger.'
+    pedPos = { x = at.x + 2500.0, y = at.y, z = at.z }
+    notices = {}
+    openMenu()
+    harness.assertTrue(notices[1].message:find('Use a charger. Nearest: ', 1, true) ~= nil)
+    harness.assertTrue(notices[1].message:find('2.5 km', 1, true) ~= nil)
+    Config.charging.pumpMessage = 'Electric vehicles cannot use petrol pumps. Use an EV charging station.'
+
+    notices, model = {}, 'adder'
+    openMenu()
+    harness.assertTrue(app ~= nil, 'petrol vehicles are still serviced at pumps')
+    harness.assertEqual(#notices, 0)
+end)
+
+harness.test('charging stations refuse petrol vehicles and far-away players', function()
+    app, notices = nil, {}
+    model = 'adder'
+    standAtCharger()
+    openCharger()
+    harness.assertEqual(app, nil)
+    harness.assertEqual(notices[1].message, 'Charging stations are for electric vehicles only.')
+
+    notices, model = {}, 'neon'
+    pedPos = { x = stationOne.x + 500.0, y = stationOne.y, z = stationOne.z }
+    openCharger()
+    harness.assertEqual(app, nil)
+    harness.assertEqual(notices[1].message, 'Move to an EV charging station first.')
+    standAtCharger()
+end)
+
+harness.test('every charging station gets one target zone with its own or the default radius', function()
+    harness.assertEqual(#zones, #Config.charging.stations)
+    for i, station in ipairs(Config.charging.stations) do
+        harness.assertEqual(zones[i].coords, station.coords)
+        harness.assertEqual(zones[i].radius, (station.radius or 0) > 0 and station.radius or Config.charging.zoneRadius)
+        harness.assertEqual(zones[i].distance, Config.charging.interactDistance)
+    end
+    harness.assertEqual(zones[1].options[1].label, 'Charge vehicle')
+end)
+
+harness.test('the charge option only shows near an electric vehicle and is memoised', function()
+    local canInteract = zones[1].options[1].canInteract
+    clock, vehicleScans = 1000, 0
+    model = 'neon'
+    harness.assertTrue(canInteract(), 'on foot beside an EV')
+    harness.assertEqual(vehicleScans, 1)
+    canInteract(); canInteract()
+    harness.assertEqual(vehicleScans, 1, 'repeated resolver ticks reuse the last answer')
+
+    clock, model = 1600, 'adder'
+    harness.assertFalse(canInteract(), 'a petrol car does not offer a charge')
+
+    clock, vehicleScans = 2200, 0
+    model = 'neon'
+    setCache('vehicle', 2)
+    harness.assertTrue(canInteract(), 'sitting in an EV')
+    harness.assertEqual(vehicleScans, 0, 'the cached vehicle replaces the world scan')
+    clock, model = 2800, 'adder'
+    harness.assertFalse(canInteract())
+    setCache('vehicle', false)
 end)
 
 harness.test('LegacyFuel aliases preserve fractional reads and nil writes without changing native exports', function()

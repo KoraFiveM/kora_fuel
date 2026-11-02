@@ -1,4 +1,4 @@
--- Map blips for Config.stations, driven by Config.blips.
+-- Map blips for Config.stations (Config.blips) and Config.charging.stations (Config.charging.blips).
 local created = {}
 
 local function removeBlips()
@@ -8,8 +8,31 @@ local function removeBlips()
     end
 end
 
+local function placeBlip(coords, pick)
+    local blip = AddBlipForCoord(coords.x, coords.y, coords.z)
+    SetBlipSprite(blip, pick('sprite'))
+    SetBlipColour(blip, pick('colour'))
+    SetBlipScale(blip, pick('scale') + 0.0)
+    SetBlipAsShortRange(blip, pick('shortRange') == true)
+    BeginTextCommandSetBlipName('STRING')
+    AddTextComponentSubstringPlayerName(pick('label'))
+    EndTextCommandSetBlipName(blip)
+    created[#created + 1] = blip
+end
+
+local function createChargingBlips()
+    local settings = Config.charging and Config.charging.blips
+    if not settings or not settings.enabled or not Fuel.chargingEnabled() then return end
+
+    for _, station in ipairs(Config.charging.stations) do
+        placeBlip(station.coords, function(key) return settings[key] end)
+    end
+end
+
 local function createBlips()
     removeBlips()
+    createChargingBlips()
+
     local settings = Config.blips
     if not settings or not settings.enabled then return end
 
@@ -34,15 +57,7 @@ local function createBlips()
 
         if override.enabled ~= false and not duplicate then
             placed[#placed + 1] = station
-            local blip = AddBlipForCoord(station.x, station.y, station.z)
-            SetBlipSprite(blip, pick('sprite'))
-            SetBlipColour(blip, pick('colour'))
-            SetBlipScale(blip, pick('scale') + 0.0)
-            SetBlipAsShortRange(blip, pick('shortRange') == true)
-            BeginTextCommandSetBlipName('STRING')
-            AddTextComponentSubstringPlayerName(pick('label'))
-            EndTextCommandSetBlipName(blip)
-            created[#created + 1] = blip
+            placeBlip(station, pick)
         end
     end
 end

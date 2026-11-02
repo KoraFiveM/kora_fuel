@@ -88,9 +88,16 @@ local function nearServicePoint(coords)
     return false
 end
 
-local function closestServiceVehicle()
+-- 'pump' services are authorised near Config.stations and 'charger' services
+-- near a Config.charging station; the server repeats the same check.
+local function closestServiceVehicle(site)
     local pedCoords = GetEntityCoords(PlayerPedId())
-    if not nearServicePoint(pedCoords) then
+    if site == 'charger' then
+        if not Fuel.nearestCharger(pedCoords, Config.charging.serviceRadius) then
+            notify('Move to an EV charging station first.', 'error')
+            return nil
+        end
+    elseif not nearServicePoint(pedCoords) then
         notify('Move to a fuel station or charging point first.', 'error')
         return nil
     end
@@ -100,11 +107,16 @@ local function closestServiceVehicle()
         notify('Park a vehicle next to the pump or charger.', 'error')
         return nil
     end
-    if GetIsVehicleEngineRunning(closest.id) then
-        notify('Switch the engine off before servicing the vehicle.', 'error')
-        return nil
-    end
-    return closest.id
+    return closest.id, pedCoords
+end
+
+-- Tells an EV driver at a petrol pump where to go instead, naming the nearest station.
+local function pumpRefusal(coords)
+    local message = Config.charging.pumpMessage
+    local station, distance = Fuel.nearestCharger(coords)
+    if not station then return message end
+    local away = distance >= 1000.0 and ('%.1f km'):format(distance / 1000.0) or ('%d m'):format(math.floor(distance))
+    return ('%s Nearest: %s (%s).'):format(message, station.label, away)
 end
 
 local appId = 'qbfuel:pump'
@@ -126,7 +138,7 @@ local function onAppAction(actionId, context)
         return { notice = { tone = 'destructive', message = 'Invalid fill amount.' } }
     end
 
-    TriggerServerEvent('qbfuel:server:purchase', data.netId, value.account, quantity, data.level)
+    TriggerServerEvent('qbfuel:server:purchase', data.netId, value.account, quantity, data.level, data.site)
     return { close = true }
 end
 
@@ -141,7 +153,7 @@ local function buildApp(spec)
     local definition = {
         id = appId,
         title = spec.title,
-        description = spec.electric and 'Battery charge' or 'Petrol pump',
+        description = spec.description or (spec.electric and 'Battery charge' or 'Petrol pump'),
         icon = spec.electric and 'Zap' or 'Fuel',
         layout = 'compact',
         placement = 'right',
@@ -223,36 +235,48 @@ local function buildApp(spec)
     return definition
 end
 
-local function openFuelMenu()
-    local vehicle = closestServiceVehicle()
+local function openServiceMenu(site)
+    local vehicle, pedCoords = closestServiceVehicle(site)
     if not vehicle then return end
+
+    local electric = isElectricVehicle(vehicle)
+    if site == 'pump' and electric and not Fuel.pumpsAcceptElectric() then
+        return notify(pumpRefusal(pedCoords), 'info')
+    end
+    if site == 'charger' and not electric then
+        return notify('Charging stations are for electric vehicles only.', 'error')
+    end
+    if GetIsVehicleEngineRunning(vehicle) then
+        return notify('Switch the engine off before servicing the vehicle.', 'error')
+    end
 
     local level = currentLevel(vehicle)
     local capacity = math.floor(Config.maxLevel) - level
     if capacity < 1 then return notify('Vehicle is already full.', 'info') end
 
-    local electric = isElectricVehicle(vehicle)
     -- Price kind follows the server-side model list so the quote matches the charge.
     local kind = Fuel.isElectricModel(GetEntityModel(vehicle)) and 'charge' or 'fuel'
     local netId = NetworkGetNetworkIdFromEntity(vehicle)
 
     Kora.nui.registerApp(buildApp({
         title = electric and 'Charge vehicle' or 'Refuel vehicle',
+        description = site == 'charger' and ('Battery charge - %s'):format(
+            Fuel.nearestCharger(pedCoords, Config.charging.serviceRadius).label) or nil,
         electric = electric,
         level = level,
         capacity = capacity,
         accounts = Config.paymentAccounts,
-        unitPrice = Config.pricePerUnit[kind],
-        priceFor = function(quantity) return Fuel.price(kind, quantity) end,
+        unitPrice = Fuel.unitPrice(kind, site),
+        priceFor = function(quantity) return Fuel.price(kind, quantity, site) end,
     }))
 
     Kora.nui.openApp(appId, {
-        data = { netId = netId, level = level, capacity = capacity },
+        data = { netId = netId, level = level, capacity = capacity, site = site },
     })
 end
 
 Kora.interact.addModel(Config.pumpModels, {
-    { label = 'Service nearby vehicle', icon = 'fuel', action = openFuelMenu },
+    { label = 'Service nearby vehicle', icon = 'fuel', action = function() openServiceMenu('pump') end },
 }, 2.5)
 
 Kora.callback.register('qbfuel:runProgress', function(netId, duration, electric)
@@ -333,3 +357,61 @@ Kora.cache.onChange('seat', function(seat)
 end)
 
 startConsuming()
+
+-- EV charging stations. Zones and models only: nothing runs until the player
+-- aims at one, and the option check below is memoised so a held aim does not
+-- rescan vehicles every resolver tick.
+local playerPed = Kora.cache.ped()
+Kora.cache.onChange('ped', function(ped) playerPed = ped end)
+
+local CHARGE_CHECK_MS = 500
+local chargeCheck = { at = -CHARGE_CHECK_MS, ready = false }
+
+local function electricVehicleNearby()
+    local now = GetGameTimer()
+    if now - chargeCheck.at < CHARGE_CHECK_MS then return chargeCheck.ready end
+    chargeCheck.at = now
+
+    local vehicle = drivenVehicle
+    if not vehicle then
+        vehicle = Kora.closest.vehicle(GetEntityCoords(playerPed), Config.vehicleSearchDistance).id
+    end
+    chargeCheck.ready = vehicle and isElectricVehicle(vehicle) or false
+    return chargeCheck.ready
+end
+
+local function registerChargingStations()
+    if not Fuel.chargingEnabled() then return end
+    local charging = Config.charging
+
+    local zoneOptions = {
+        {
+            label = 'Charge vehicle',
+            icon = 'Zap',
+            canInteract = electricVehicleNearby,
+            onSelect = function() openServiceMenu('charger') end,
+        },
+    }
+    for _, station in ipairs(charging.stations) do
+        local radius = (tonumber(station.radius) or 0.0) > 0.0 and station.radius or charging.zoneRadius
+        exports.kora_target:addSphereZone({
+            coords = station.coords,
+            radius = radius + 0.0,
+            distance = charging.interactDistance + 0.0,
+            options = zoneOptions,
+        })
+    end
+
+    if #charging.propModels > 0 then
+        Kora.interact.addModel(charging.propModels, {
+            {
+                label = 'Charge vehicle',
+                icon = 'zap',
+                canInteract = electricVehicleNearby,
+                action = function() openServiceMenu('charger') end,
+            },
+        }, charging.interactDistance)
+    end
+end
+
+registerChargingStations()
