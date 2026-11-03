@@ -33,6 +33,26 @@ harness.test('electric list covers newer EVs and has no duplicates', function()
     harness.assertTrue(Config.electric.useNative, 'native detection defaults on')
 end)
 
+harness.test('replacing the electric list (late client config) is picked up', function()
+    local authored = Config.electricVehicles
+    harness.assertFalse(Fuel.isElectricModel('adder'))
+    Config.electricVehicles = { 'adder', ' Neon ' }
+    harness.assertTrue(Fuel.isElectricModel('adder'), 'an owner-added model should count')
+    harness.assertFalse(Fuel.isElectricModel('envisage'), 'a removed model should stop counting')
+    Config.electricVehicles = authored
+    harness.assertTrue(Fuel.isElectricModel('envisage'))
+    harness.assertFalse(Fuel.isElectricModel('adder'))
+end)
+
+harness.test('every vehicle on the requested EV list is electric', function()
+    for _, m in ipairs({ 'voltic', 'voltic2', 'caddy', 'caddy2', 'caddy3', 'surge', 'iwagen', 'raiden', 'airtug', 'neon',
+        'omnisegt', 'cyclone', 'tezeract', 'rcbandito', 'imorgon', 'dilettante', 'dilettante2', 'khamelion', 'suzume',
+        'inductor', 'inductor2', 'powersurge', 'buffalo5', 'envisage', 'coureur', 'pipistrello', 'virtue', 'xtreme',
+        'vivanite2', 'estride' }) do
+        harness.assertTrue(Fuel.isElectricModel(m), m .. ' should be electric')
+    end
+end)
+
 harness.test('fuel level is clamped to the native 0-100 range', function()
     harness.assertEqual(Fuel.clampLevel(-5), 0)
     harness.assertEqual(Fuel.clampLevel(150), Config.maxLevel)

@@ -190,6 +190,34 @@ harness.test('every charging station gets one target zone with its own or the de
         harness.assertEqual(zones[i].distance, Config.charging.interactDistance)
     end
     harness.assertEqual(zones[1].options[1].label, 'Charge vehicle')
+    harness.assertEqual(zones[1].drawSprite, true, 'zones show the kora_target world icon by default')
+end)
+
+harness.test('the isElectricVehicle export asks the native with the model hash and falls back to the list', function()
+    local isElectric = nativeExports.isElectricVehicle
+    harness.assertTrue(isElectric ~= nil, 'export registered')
+    local asked
+    GetIsVehicleElectric = function(arg) asked = arg return arg == 'future_ev' end
+    model = 'future_ev'
+    harness.assertTrue(isElectric(2), 'a model only the game knows as electric counts')
+    harness.assertEqual(asked, 'future_ev', 'the native takes the model hash, not the entity')
+    model = 'adder'
+    harness.assertFalse(isElectric(2))
+    GetIsVehicleElectric = nil
+    model = 'envisage'
+    harness.assertTrue(isElectric(2), 'listed EVs count without the native')
+end)
+
+harness.test('the pump message names whichever station is nearest the player, wherever they are', function()
+    model = 'neon'
+    for _, station in ipairs(Config.charging.stations) do
+        app, notices = nil, {}
+        pedPos = { x = station.coords.x + 30.0, y = station.coords.y, z = station.coords.z }
+        openMenu()
+        harness.assertTrue(notices[1].message:find('Nearest: ' .. station.label .. ' (30 m).', 1, true) ~= nil,
+            'pump near ' .. station.label .. ' should name it')
+    end
+    standAtCharger()
 end)
 
 harness.test('the charge option only shows near an electric vehicle and is memoised', function()

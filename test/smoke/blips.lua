@@ -11,21 +11,30 @@ CreateThread = function(fn) thread = fn end
 AddEventHandler = function(name, fn) if name == "onResourceStop" then stopHandler = fn end end
 GetCurrentResourceName = function() return "kora_fuel" end
 
-local blips, nextId, pending = {}, 0, nil
-DoesBlipExist = function(id) return blips[id] ~= nil end
-AddBlipForCoord = function(x, y, z)
-    nextId = nextId + 1
-    blips[nextId] = { x = x, y = y, z = z }
-    return nextId
+local blips, nextId = {}, 0
+Kora = {
+    blips = {
+        create = function(coords, options)
+            nextId = nextId + 1
+            blips[nextId] = {
+                x = coords.x, y = coords.y, z = coords.z, sprite = options.sprite, colour = options.color,
+                scale = options.scale, shortRange = options.shortRange, category = options.category,
+                label = options.name,
+            }
+            return nextId
+        end,
+        remove = function(id) blips[id] = nil return true end,
+    },
+}
+
+-- Blip ids keep rising across rebuilds, so find the first charging blip by its sprite.
+local function firstCharger()
+    local best
+    for id, b in pairs(blips) do
+        if b.sprite == Config.charging.blips.sprite and (not best or id < best) then best = id end
+    end
+    return blips[best]
 end
-SetBlipSprite = function(id, v) blips[id].sprite = v end
-SetBlipColour = function(id, v) blips[id].colour = v end
-SetBlipScale = function(id, v) blips[id].scale = v end
-SetBlipAsShortRange = function(id, v) blips[id].shortRange = v end
-BeginTextCommandSetBlipName = function() end
-AddTextComponentSubstringPlayerName = function(label) pending = label end
-EndTextCommandSetBlipName = function(id) blips[id].label = pending end
-RemoveBlip = function(id) blips[id] = nil end
 
 local function count()
     local n = 0
@@ -54,7 +63,11 @@ end)
 
 harness.test("charging station blips use Config.charging.blips and can be turned off", function()
     local ev = blips[1]
-    harness.assertEqual(ev.label, "EV Charging Station")
+    harness.assertEqual(ev.label, "EV Charging Station - " .. Config.charging.stations[1].label)
+    harness.assertEqual(ev.sprite, 354)
+    harness.assertEqual(ev.colour, 46)
+    harness.assertEqual(ev.category, "Fuel")
+    harness.assertFalse(ev.shortRange)
     harness.assertEqual(ev.colour, Config.charging.blips.colour)
     harness.assertEqual(ev.sprite, Config.charging.blips.sprite)
     harness.assertEqual(ev.x, Config.charging.stations[1].coords.x)
@@ -68,6 +81,29 @@ harness.test("charging station blips use Config.charging.blips and can be turned
     Config.charging.enabled = true
     thread()
     harness.assertEqual(count(), #Config.stations - 2 + chargers)
+end)
+
+harness.test("station names can be left off the charging blip label", function()
+    Config.charging.blips.showStationName = false
+    thread()
+    harness.assertEqual(firstCharger().label, "EV Charging Station")
+    Config.charging.blips.showStationName = true
+    thread()
+end)
+
+harness.test("a bad blip category falls back to Fuel instead of stopping the other blips", function()
+    local create = Kora.blips.create
+    Kora.blips.create = function(coords, options)
+        if options.category == "Nope" then error("unknown category") end
+        return create(coords, options)
+    end
+    Config.charging.blips.category = "Nope"
+    thread()
+    harness.assertEqual(count(), #Config.stations - 2 + chargers)
+    harness.assertEqual(firstCharger().category, "Fuel")
+    Config.charging.blips.category = "Fuel"
+    Kora.blips.create = create
+    thread()
 end)
 
 harness.test("resource stop removes every blip", function()

@@ -119,8 +119,10 @@ Config.blips = {
 -- station before taking payment, so this list is an authorization boundary.
 -- Coordinates are road and car-park positions already used elsewhere on this
 -- server (kora_garages parking bays, kora_taxi road stops); `coords` sits about
--- half a metre above the ground. Add, move or remove entries freely; `radius`
--- is optional (0 or omitted uses `zoneRadius`).
+-- half a metre above the ground. The Legion Square Parking station is centred on
+-- the middle of the kora_garages bay row there (radius 8 covers the row). Add,
+-- move or remove entries freely; `radius` is optional (0 or omitted uses
+-- `zoneRadius`).
 Config.charging = {
     -- Master switch. When false (or when no stations are listed) there is no
     -- charging network and petrol pumps keep servicing EVs as before.
@@ -143,8 +145,12 @@ Config.charging = {
     -- charge option within a station's service radius. Empty by default: GTA V
     -- has no vanilla EV charger prop, so the default stations are zone-only.
     propModels = {},
+    -- Draw kora_target's world icon at every station while the player is within
+    -- Config.target.sprites.drawDistance, so the spot is visible before aiming.
+    -- It is a display hint only; the interaction itself is unchanged.
+    worldIcon = true,
     stations = {
-        { label = 'Legion Square Parking', coords = vector3(210.64, -791.31, 30.4), radius = 4.0 },
+        { label = 'Legion Square Parking', coords = vector3(211.37, -789.13, 30.4), radius = 8.0 },
         { label = 'Alta Street Parking', coords = vector3(270.94, -322.96, 44.4), radius = 4.0 },
         { label = 'Sandy Shores Parking', coords = vector3(1735.0, 3714.3, 34.6), radius = 4.0 },
         { label = 'Rockford Plaza', coords = vector3(-586.48, -255.96, 36.4), radius = 5.0 },
@@ -155,14 +161,21 @@ Config.charging = {
         { label = 'Grapeseed Main Street', coords = vector3(1662.55, 4876.71, 42.5), radius = 5.0 },
         { label = 'Paleto Bay', coords = vector3(-9.51, 6529.67, 31.9), radius = 5.0 },
     },
-    -- Map blips, one per station. Blip colours are GTA palette ids.
+    -- Map blips, one per station, created through Kora.blips so players can
+    -- also hide them with /blips. `sprite` and `colour` are GTA blip ids
+    -- (354 / 46 by default). The legend entry reads `label`, followed by the
+    -- station name when `showStationName` is true. `category` is a fixed
+    -- Kora.blips pause-map category. shortRange = false keeps the blips on the
+    -- minimap at any distance, which helps drivers find the nearest station.
     blips = {
         enabled = true,
-        sprite = 361,
-        colour = 2,
-        scale = 0.6,
-        shortRange = true,
+        sprite = 354,
+        colour = 46,
+        scale = 0.8,
+        shortRange = false,
         label = 'EV Charging Station',
+        showStationName = true,
+        category = 'Fuel',
     },
 }
 
@@ -391,12 +404,26 @@ if Kora and Kora.config and Kora.config.adopt then
     Config.charging.blips.sprite = Kora.config.integer(Config.charging.blips.sprite, {
         min = 0,
         label = 'Charging station blip sprite',
-        description = 'Sets the GTA blip sprite ID used for charging stations. The default 361 is the fuel icon; the colour tells them apart from gas stations.',
+        description = 'Sets the GTA blip sprite ID used for charging stations. The default 354 is the EV charging icon, which keeps them distinct from the petrol pump blips.',
     })
     Config.charging.blips.colour = Kora.config.integer(Config.charging.blips.colour, {
         min = 0,
         label = 'Charging station blip colour',
-        description = 'Sets the GTA blip colour ID used for charging stations. The default 2 is green.',
+        description = 'Sets the GTA blip colour ID used for charging stations. The default is 46.',
+    })
+    Config.charging.blips.showStationName = Kora.config.boolean(Config.charging.blips.showStationName, {
+        label = 'Name charging stations on the map',
+        description = 'Adds the station name, such as Legion Square Parking, after the blip label in the pause-map legend. Turn this off to show only the blip label.',
+    })
+    Config.charging.blips.category = Kora.config.string(Config.charging.blips.category, {
+        minLength = 1,
+        advanced = true,
+        label = 'Charging station blip category',
+        description = 'Sets the fixed kora_lib pause-map category the charging station blips are listed under, for example Fuel or Garage. Players can hide the whole category with /blips.',
+    })
+    Config.charging.worldIcon = Kora.config.boolean(Config.charging.worldIcon, {
+        label = 'Show world icon at charging stations',
+        description = 'Draws the kora_target interaction icon at each charging station when the player is nearby, so the spot is visible before aiming at it. The interaction works the same with it off.',
     })
     Config.charging.blips.scale = Kora.config.number(Config.charging.blips.scale, {
         min = 0.1,

@@ -5,7 +5,7 @@ Native vehicle fuel consumption, petrol-station refuelling, and EV charging stat
 Fuel and charge share GTA's 0–100 native vehicle fuel level. This is deliberate:
 the HUD, kora_garages, and vehicle streaming all see the same level, and a stored
 vehicle already persists that level through the existing `player_vehicles.fuel`
-column. Electric vehicles charge at dedicated EV charging stations (see below). Add addon EV spawn names to `Config.electricVehicles` (the single source of truth, also read by kora_hud through the `isElectricVehicle` export). `Config.electric.useNative` (default true) additionally asks the game via `GetIsVehicleElectric` on the client, once per model, for the HUD icon and pump wording; pricing stays on the list.
+column. Electric vehicles charge at dedicated EV charging stations (see below). Add addon EV spawn names to `Config.electricVehicles` (the single source of truth, also read by kora_hud through the `isElectricVehicle` export). `Config.electric.useNative` (default true) additionally asks the game via `GetIsVehicleElectric` (called with the model hash) on the client, once per model, for the HUD icon and pump wording; pricing stays on the list.
 
 Client exports: `GetFuel(vehicle)`, `SetFuel(vehicle, level)`, and
 `isElectricVehicle(vehicle)`.
@@ -42,7 +42,8 @@ the resource stops.
 `radius`). The defaults are ten car parks and street spots around the map: Legion
 Square, Alta Street, Sandy Shores, Rockford Plaza, Vespucci Canals, Del Perro Pier,
 the airport, Chumash, Grapeseed and Paleto Bay. GTA V has no vanilla EV charger
-prop, so the stations are invisible kora_target sphere zones: hold Alt and aim at a
+prop, so each station is a kora_target sphere zone (with a world icon while you are
+nearby, `Config.charging.worldIcon`) and a map blip: hold Alt and aim at a
 spot within the station's `radius` (default `zoneRadius`, 4.0 m) while an electric
 vehicle is parked beside you (or you are in it) to get **Charge vehicle**. The
 option never shows for petrol vehicles. List custom charger props in
@@ -82,13 +83,21 @@ stations listed, pumps charge EVs exactly as before.
 | `interactDistance` | `5.0` | Maximum aim distance to the zone |
 | `propModels` | `{}` | Optional charger prop models |
 | `stations` | ten defaults | `{ label, coords, radius }` entries |
+| `worldIcon` | `true` | Show kora_target's world icon at each station when nearby |
 | `blips` | see below | Station map blips |
 
-Station blips (`Config.charging.blips`): `enabled` (`true`), `sprite` (361, the fuel
-icon), `colour` (2, green, so they differ from the red gas station blips), `scale`
-(0.6), `shortRange` (`true`) and `label` ("EV Charging Station"). Blips are created
-for every station and removed when the resource stops. Stations and blips are
-also editable in the kora_lib config editor.
+Station blips (`Config.charging.blips`, created through `Kora.blips`, so players can
+hide them with `/blips`): `enabled` (`true`), `sprite` (354), `colour` (46), `scale`
+(0.8), `shortRange` (`false`, so they show on the minimap at any distance), `label`
+("EV Charging Station"), `showStationName` (`true`: the legend reads "EV Charging
+Station - Legion Square Parking") and `category` (`Fuel`, a fixed kora_lib pause-map
+category). Blips are created for every station and removed when the resource stops.
+Stations and blips are also editable in the kora_lib config editor.
+
+The Legion Square Parking station is centred on the middle bay of the kora_garages
+Legion Square bay row (radius 8), so an EV parked in any of the bays there can charge.
+The petrol-pump message names the station nearest the player at that moment, so it
+always matches a listed station and its blip.
 
 ## Tests
 

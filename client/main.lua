@@ -3,7 +3,8 @@ local function notify(message, kind)
 end
 
 -- GetIsVehicleElectric is missing on older game builds, so every call is
--- guarded. Results are memoised per model: the answer never changes for a model.
+-- guarded. It takes a vehicle model hash, not an entity handle. Results are
+-- memoised per model: the answer never changes for a model.
 local nativeElectric = {}
 
 local function isNativeElectric(vehicle)
@@ -11,7 +12,7 @@ local function isNativeElectric(vehicle)
     local model = GetEntityModel(vehicle)
     local known = nativeElectric[model]
     if known == nil then
-        local ok, result = pcall(GetIsVehicleElectric, vehicle)
+        local ok, result = pcall(GetIsVehicleElectric, model)
         known = ok and result == true
         nativeElectric[model] = known
     end
@@ -399,6 +400,7 @@ local function registerChargingStations()
             radius = radius + 0.0,
             distance = charging.interactDistance + 0.0,
             options = zoneOptions,
+            drawSprite = charging.worldIcon == true,
         })
     end
 

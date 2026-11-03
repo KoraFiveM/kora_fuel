@@ -5,15 +5,28 @@ local function hash(model)
     return joaat(model)
 end
 
-local electricModels = {}
-for _, model in ipairs(Config.electricVehicles or {}) do
-    electricModels[hash(model)] = true
+-- The hash set is derived from Config.electricVehicles and rebuilt whenever that
+-- table is replaced. On the client kora_lib applies saved overrides after this
+-- script has loaded, so a set built once at load time would keep the authored
+-- list and misclassify models an owner added.
+local electricModels, electricSource = {}, nil
+
+local function electricSet()
+    local list = Config.electricVehicles
+    if list ~= electricSource then
+        electricModels, electricSource = {}, list
+        for _, model in ipairs(list or {}) do
+            if type(model) == 'string' then model = model:match('^%s*(.-)%s*$') end
+            if model ~= '' then electricModels[hash(model)] = true end
+        end
+    end
+    return electricModels
 end
 
 ---@param model number|string
 ---@return boolean
 function Fuel.isElectricModel(model)
-    return electricModels[hash(model)] == true
+    return electricSet()[hash(model)] == true
 end
 
 ---@param value number|nil

@@ -3,29 +3,40 @@ local created = {}
 
 local function removeBlips()
     for i = #created, 1, -1 do
-        if DoesBlipExist(created[i]) then RemoveBlip(created[i]) end
+        Kora.blips.remove(created[i])
         created[i] = nil
     end
 end
 
-local function placeBlip(coords, pick)
-    local blip = AddBlipForCoord(coords.x, coords.y, coords.z)
-    SetBlipSprite(blip, pick('sprite'))
-    SetBlipColour(blip, pick('colour'))
-    SetBlipScale(blip, pick('scale') + 0.0)
-    SetBlipAsShortRange(blip, pick('shortRange') == true)
-    BeginTextCommandSetBlipName('STRING')
-    AddTextComponentSubstringPlayerName(pick('label'))
-    EndTextCommandSetBlipName(blip)
-    created[#created + 1] = blip
+-- Blips go through Kora.blips: tracked per resource, listed under a pause-map
+-- category and hideable by the player with /blips.
+local function placeBlip(coords, pick, name)
+    local options = {
+        sprite = pick('sprite'),
+        color = pick('colour'),
+        scale = pick('scale') + 0.0,
+        shortRange = pick('shortRange') == true,
+        category = pick('category') or 'Fuel',
+        name = name or pick('label'),
+    }
+    -- A bad category in config must not stop the other blips: retry in Fuel.
+    local ok, blip = pcall(Kora.blips.create, coords, options)
+    if not ok then
+        options.category = 'Fuel'
+        ok, blip = pcall(Kora.blips.create, coords, options)
+    end
+    if ok and blip then created[#created + 1] = blip end
 end
 
 local function createChargingBlips()
     local settings = Config.charging and Config.charging.blips
     if not settings or not settings.enabled or not Fuel.chargingEnabled() then return end
 
+    local function pick(key) return settings[key] end
     for _, station in ipairs(Config.charging.stations) do
-        placeBlip(station.coords, function(key) return settings[key] end)
+        local name = settings.label
+        if settings.showStationName and station.label then name = ('%s - %s'):format(settings.label, station.label) end
+        placeBlip(station.coords, pick, name)
     end
 end
 
