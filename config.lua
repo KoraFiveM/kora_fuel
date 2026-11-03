@@ -17,6 +17,11 @@ Config.pricePerUnit = {
     charge = 1.25,
 }
 
+-- Payments are whole dollars (physical cash cannot take cents), so units x
+-- price is rounded: 'up' (never below the advertised unit price), 'nearest'
+-- or 'down'. The menu shows the exact amount beside a rounded total.
+Config.priceRounding = 'up'
+
 -- One second at the configured reference speed consumes this amount. Every
 -- class has its own rate; omitted classes use `default`.
 Config.consumeInterval = 1000
@@ -70,7 +75,8 @@ Config.electric = {
 -- shows "Refuel vehicle".
 Config.pumpModels = {
     'prop_gas_pump_1a', 'prop_gas_pump_1b', 'prop_gas_pump_1c',
-    'prop_gas_pump_1d', 'prop_vintage_pump', 'prop_gas_pump_old2'
+    'prop_gas_pump_1d', 'prop_vintage_pump', 'prop_gas_pump_old2',
+    'prop_gas_pump_old3', -- Grapeseed
 }
 
 -- Service areas are deliberately server-side too: the client may choose an
@@ -146,6 +152,9 @@ Config.charging = {
     -- Config.pricePerUnit.charge as well.
     allowAtPumps = false,
     pumpMessage = 'Electric vehicles cannot use petrol pumps. Use an EV charging station.',
+    -- Also set the GPS waypoint to that nearest station (one SetNewWaypoint
+    -- when the pump is used; nothing keeps running).
+    waypointToNearest = true,
     -- Station price per 1% of charge, and how long 1% takes to charge. The
     -- server prices and times the purchase itself; the client only displays it.
     pricePerPercent = 1.25,
@@ -292,6 +301,11 @@ if Kora and Kora.config and Kora.config.adopt then
             description = 'Sets the amount charged from the selected player account for each native fuel-level unit added to an electric vehicle’s battery. The server calculates the final price from the authoritative vehicle level.',
         }),
     })
+    Config.priceRounding = Kora.config.enum(Config.priceRounding, {
+        options = { 'up', 'nearest', 'down' },
+        label = 'Price rounding',
+        description = 'Payments are whole dollars, so the units times price total is rounded: up (never below the advertised unit price), to the nearest dollar, or down. The menu shows the exact amount beside the rounded total. With down, a total under one dollar is free.',
+    })
     Config.consumeInterval = Kora.config.integer(Config.consumeInterval, {
         advanced = true,
         min = 100,
@@ -397,6 +411,10 @@ if Kora and Kora.config and Kora.config.adopt then
         minLength = 1,
         label = 'Petrol pump message for electric vehicles',
         description = 'Sets the notification shown to a player who uses a petrol pump with an electric vehicle when pumps do not charge EVs. The nearest charging station and its distance are appended automatically.',
+    })
+    Config.charging.waypointToNearest = Kora.config.boolean(Config.charging.waypointToNearest, {
+        label = 'Waypoint to the nearest charging station',
+        description = 'When an electric vehicle is refused at a petrol pump, also sets the GPS waypoint to the nearest charging station and says so in the message.',
     })
     Config.charging.pricePerPercent = Kora.config.number(Config.charging.pricePerPercent, {
         min = 0,

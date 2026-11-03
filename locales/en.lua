@@ -16,5 +16,6 @@ return {
         battery_full = 'Battery is already fully charged.',
         refuel_cancelled = 'Refuelling vehicle cancelled.',
         charge_cancelled = 'Charging vehicle cancelled.',
+        charger_waypoint = 'A GPS waypoint has been set to it.',
     },
 }

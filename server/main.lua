@@ -88,10 +88,14 @@ RegisterNetEvent('qbfuel:server:purchase', function(netId, account, quantity, cu
         info, reason = validate(src, netId, account, quantity, currentLevel, site)
         if not info then return sendResult(src, false, reason, atCharger) end
         Kora.print.debug(netId, account, quantity, currentLevel, info)
-        local paid, payErr = exports.kora_core:removeMoney(src, account, info.price, ('%s vehicle %s'):format(info.kind, netId))
-        if not paid then
-            return sendResult(src, false, payErr == 'insufficient funds' and 'Insufficient funds.' or 'Payment could not be processed.',
-                info.electric)
+        -- A free total (price 0, or rounded down to 0) has nothing to take:
+        -- kora_core refuses a zero removal, which would fail the service.
+        if info.price > 0 then
+            local paid, payErr = exports.kora_core:removeMoney(src, account, info.price, ('%s vehicle %s'):format(info.kind, netId))
+            if not paid then
+                return sendResult(src, false, payErr == 'insufficient funds' and 'Insufficient funds.' or 'Payment could not be processed.',
+                    info.electric)
+            end
         end
 
         TriggerClientEvent('qbfuel:client:fillVehicle', src, netId, quantity)

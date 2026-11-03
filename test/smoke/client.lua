@@ -52,6 +52,8 @@ IsEntityAVehicle = function(vehicle) return vehicle == 2 end
 NetworkGetNetworkIdFromEntity = function() return 12 end
 local model = 'adder'
 GetEntityModel = function() return model end
+local waypoint
+SetNewWaypoint = function(x, y) waypoint = { x = x, y = y } end
 
 local openMenu, app, openData, purchase
 local notices, vehicleScans = {}, 0
@@ -115,12 +117,14 @@ harness.test('fuel and charging totals track the selected amount without purchas
         local update = app.onChange('fuel-submit', { value = { quantity = 7, account = 'bank' } })
         harness.assertEqual(update.navigation[1].content.blocks[2].items[2].value,
             ('$%d'):format(Fuel.price(kind, 7, site)))
-        harness.assertEqual(total.description, '7 units')
+        local exact = Fuel.exactPrice(kind, 7, site)
+        local units = exact % 1 == 0 and '7 units' or ('7 units ($%.2f rounded up)'):format(exact)
+        harness.assertEqual(total.description, units)
         harness.assertEqual(purchase, nil, 'an edit must not trigger a purchase')
         for _, invalid in ipairs({ '', 0, 41, 1.5, math.huge, 0 / 0 }) do
             harness.assertEqual(app.onChange('fuel-submit', { value = { quantity = invalid } }), nil)
         end
-        harness.assertEqual(total.description, '7 units', 'invalid edits must leave the total alone')
+        harness.assertEqual(total.description, units, 'invalid edits must leave the total alone')
     end
     harness.assertEqual(#notices, 0, 'no refusal or error is shown for valid services')
     Config.charging.allowAtPumps = false
@@ -161,7 +165,7 @@ harness.test('petrol pumps send EVs to the nearest charging station instead of o
     harness.assertEqual(app, nil, 'no charge menu at a petrol pump')
     harness.assertEqual(#notices, 1)
     harness.assertEqual(notices[1].message, Config.charging.pumpMessage .. ' Nearest: ' ..
-        Config.charging.stations[2].label .. ' (100 m).')
+        Config.charging.stations[2].label .. ' (100 m). A GPS waypoint has been set to it.')
 
     Config.charging.pumpMessage = 'Use a charger.'
     -- Out at sea south of the port: every station is kilometres away.
@@ -177,6 +181,47 @@ harness.test('petrol pumps send EVs to the nearest charging station instead of o
     openMenu()
     harness.assertTrue(app ~= nil, 'petrol vehicles are still serviced at pumps')
     harness.assertEqual(#notices, 0)
+end)
+
+harness.test('the pump refusal sets the GPS to the nearest charger unless switched off', function()
+    model, notices, waypoint = 'neon', {}, nil
+    local station = Config.charging.stations[2]
+    pedPos = { x = station.coords.x + 100.0, y = station.coords.y, z = station.coords.z }
+    openMenu()
+    local at = Fuel.chargerPosition(station)
+    harness.assertEqual(waypoint.x, at.x)
+    harness.assertEqual(waypoint.y, at.y)
+
+    Config.charging.waypointToNearest = false
+    notices, waypoint = {}, nil
+    openMenu()
+    harness.assertEqual(waypoint, nil, 'no waypoint when the option is off')
+    harness.assertEqual(notices[1].message, Config.charging.pumpMessage .. ' Nearest: ' .. station.label .. ' (100 m).')
+    Config.charging.waypointToNearest = true
+
+    notices, waypoint, model = {}, nil, 'adder'
+    openMenu()
+    harness.assertEqual(waypoint, nil, 'petrol vehicles never get a waypoint')
+    standAtCharger()
+end)
+
+harness.test('a 1% top-up explains its whole-dollar total and uses singular units', function()
+    model, notices, fuelLevel = 'neon', {}, 99
+    standAtCharger()
+    openCharger()
+    local blocks = app.navigation[1].content.blocks
+    harness.assertEqual(blocks[2].items[1].value, '$1.25')
+    harness.assertEqual(blocks[2].items[2].value, '$2')
+    harness.assertEqual(blocks[2].items[2].description, '1 unit ($1.25 rounded up)')
+    harness.assertEqual(blocks[3].fields[1].description, '$1.25 per unit, up to 1 unit. Totals are whole dollars.')
+
+    Config.priceRounding = 'nearest'
+    openCharger()
+    blocks = app.navigation[1].content.blocks
+    harness.assertEqual(blocks[2].items[2].value, '$1')
+    harness.assertEqual(blocks[2].items[2].description, '1 unit ($1.25 rounded)')
+    Config.priceRounding = 'up'
+    fuelLevel = 60
 end)
 
 harness.test('charging stations refuse petrol vehicles and far-away players', function()

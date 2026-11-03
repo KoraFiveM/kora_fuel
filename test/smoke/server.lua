@@ -90,6 +90,17 @@ harness.test('a completed purchase charges the configured price and fills the re
     harness.assertTrue(pushes[#pushes].args[1])
 end)
 
+harness.test('a free total fills the vehicle without asking kora_core to remove $0', function()
+    local saved = Config.pricePerUnit.fuel
+    Config.pricePerUnit.fuel = 0
+    completed, paymentAccepted = true, true
+    purchase()
+    harness.assertEqual(#payments, 0)
+    harness.assertEqual(pushes[1].name, 'qbfuel:client:fillVehicle')
+    harness.assertTrue(pushes[#pushes].args[1])
+    Config.pricePerUnit.fuel = saved
+end)
+
 harness.test('invalid accounts and fill amounts are rejected before progress or payment', function()
     for _, request in ipairs({ { 'invalid', 20, 80 }, { 'cash', 21, 80 }, { 'cash', -1, 80 }, { 'cash', 1.5, 80 } }) do
         purchase(table.unpack(request))

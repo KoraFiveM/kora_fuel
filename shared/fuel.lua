@@ -115,12 +115,32 @@ function Fuel.unitPrice(kind, site)
     return charging and tonumber(charging.pricePerPercent) or (Config.pricePerUnit[kind] or 0)
 end
 
+---Units times the unit price in cents, before rounding to whole dollars. The
+---cent rounding keeps float noise (100 x 1.1 = 110.00000000000001) from
+---tipping a whole total up a dollar.
 ---@param kind string 'fuel'|'charge'
 ---@param quantity number
 ---@param site? string 'pump' (default) or 'charger'
 ---@return number
+function Fuel.exactPrice(kind, quantity, site)
+    local exact = (tonumber(quantity) or 0) * Fuel.unitPrice(kind, site)
+    return math.floor(exact * 100 + 0.5) / 100
+end
+
+local rounders = {
+    up = math.ceil,
+    nearest = function(value) return math.floor(value + 0.5) end,
+    down = math.floor,
+}
+
+---The whole-dollar amount actually charged (Config.priceRounding).
+---@param kind string 'fuel'|'charge'
+---@param quantity number
+---@param site? string 'pump' (default) or 'charger'
+---@return integer
 function Fuel.price(kind, quantity, site)
-    return math.ceil((tonumber(quantity) or 0) * Fuel.unitPrice(kind, site))
+    local round = rounders[Config.priceRounding] or rounders.up
+    return math.tointeger(round(Fuel.exactPrice(kind, quantity, site))) or 0
 end
 
 ---@param quantity number

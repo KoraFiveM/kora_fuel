@@ -87,6 +87,12 @@ billed at the petrol price even at a station, so the client cannot buy cheaper
 energy by mislabelling it. This also covers models that are only recognised through
 `Config.electric.useNative`: add those to the list so they get charging prices.
 
+Payments are whole dollars (physical cash cannot take cents), so units x price
+is rounded by `Config.priceRounding`: `'up'` (default, never below the advertised
+unit price), `'nearest'` or `'down'` (a total under $1 is then free). When the
+total is not exact the menu shows what it was rounded from, for example
+"1 unit ($1.25 rounded up)".
+
 Notifications about an electric vehicle or a charging station are titled
 **Charging**, petrol ones **Fuel** (`locales/en.lua`).
 
@@ -94,7 +100,9 @@ Notifications about an electric vehicle or a charging station are titled
 
 While charging stations are enabled, an EV used at a petrol pump is not offered a
 charge. It gets `Config.charging.pumpMessage` plus the nearest station and its
-distance, and the server refuses a pump purchase for it. Set
+distance, and the server refuses a pump purchase for it. With
+`Config.charging.waypointToNearest` (default `true`) the GPS waypoint is also set
+to that station and the message says so. Set
 `Config.charging.allowAtPumps = true` to let pumps charge EVs as well (at
 `Config.pricePerUnit.charge`). With `Config.charging.enabled = false`, or no
 stations listed, pumps charge EVs exactly as before.
@@ -106,6 +114,7 @@ stations listed, pumps charge EVs exactly as before.
 | `enabled` | `true` | Master switch for the charging network |
 | `allowAtPumps` | `false` | Let petrol pumps charge EVs too |
 | `pumpMessage` | "Electric vehicles cannot use petrol pumps. Use an EV charging station." | Shown to EVs at a pump |
+| `waypointToNearest` | `true` | Also set the GPS waypoint to the nearest station when an EV uses a pump |
 | `pricePerPercent` | `1.25` | Price of 1% charge at a station |
 | `secondsPerPercent` | `0.25` | Progress time per 1% (`Config.minimumProgressMs` still applies) |
 | `serviceRadius` | `15.0` | Server-side distance from a station for a paid charge |

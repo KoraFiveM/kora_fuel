@@ -113,19 +113,41 @@ local function closestServiceVehicle(site)
     return closest.id, pedCoords
 end
 
--- Tells an EV driver at a petrol pump where to go instead, naming the nearest station.
+-- Tells an EV driver at a petrol pump where to go instead, naming the nearest
+-- station and, with Config.charging.waypointToNearest, setting the GPS to it.
 local function pumpRefusal(coords)
     local message = Config.charging.pumpMessage
     local station, distance = Fuel.nearestCharger(coords)
     if not station then return message end
     local away = distance >= 1000.0 and ('%.1f km'):format(distance / 1000.0) or ('%d m'):format(math.floor(distance))
-    return ('%s Nearest: %s (%s).'):format(message, station.label, away)
+    message = ('%s Nearest: %s (%s).'):format(message, station.label, away)
+    if Config.charging.waypointToNearest then
+        local at = Fuel.chargerPosition(station)
+        SetNewWaypoint(at.x + 0.0, at.y + 0.0)
+        message = ('%s %s'):format(message, Kora.lang('info.charger_waypoint'))
+    end
+    return message
 end
 
 local appId = 'qbfuel:pump'
 
 local function titleCase(text)
     return (tostring(text):gsub('^%l', string.upper))
+end
+
+local function unitCount(quantity)
+    return ('%d %s'):format(quantity, quantity == 1 and 'unit' or 'units')
+end
+
+local roundingNote = { up = 'rounded up', nearest = 'rounded', down = 'rounded down' }
+
+-- Payments are whole dollars, so a total that is not exactly units x price
+-- says what it was rounded from: "1 unit ($1.25 rounded up)".
+local function totalDescription(spec, quantity)
+    local exact = spec.exactFor(quantity)
+    if exact == spec.priceFor(quantity) then return unitCount(quantity) end
+    return ('%s ($%.2f %s)'):format(unitCount(quantity), exact,
+        roundingNote[Config.priceRounding] or roundingNote.up)
 end
 
 -- Static for the lifetime of the shell. Per-open values (netId, level, capacity)
@@ -187,7 +209,7 @@ local function buildApp(spec)
                                 {
                                     label = 'Total Price',
                                     value = ('$%d'):format(spec.priceFor(spec.capacity)),
-                                    description = ('%d units'):format(spec.capacity),
+                                    description = totalDescription(spec, spec.capacity),
                                 },
                             },
                         },
@@ -200,7 +222,8 @@ local function buildApp(spec)
                                 {
                                     id = 'quantity',
                                     label = 'Amount to add',
-                                    description = ('$%.2f per unit, up to %d units.'):format(spec.unitPrice, spec.capacity),
+                                    description = ('$%.2f per unit, up to %s.%s'):format(spec.unitPrice,
+                                        unitCount(spec.capacity), spec.unitPrice % 1 ~= 0 and ' Totals are whole dollars.' or ''),
                                     type = 'range',
                                     min = 1,
                                     max = spec.capacity,
@@ -232,7 +255,7 @@ local function buildApp(spec)
 
         local total = definition.navigation[1].content.blocks[2].items[2]
         total.value = ('$%d'):format(spec.priceFor(quantity))
-        total.description = ('%d units'):format(quantity)
+        total.description = totalDescription(spec, quantity)
         return { navigation = definition.navigation }
     end
     return definition
@@ -273,6 +296,7 @@ local function openServiceMenu(site)
         accounts = Config.paymentAccounts,
         unitPrice = Fuel.unitPrice(kind, site),
         priceFor = function(quantity) return Fuel.price(kind, quantity, site) end,
+        exactFor = function(quantity) return Fuel.exactPrice(kind, quantity, site) end,
     }))
 
     Kora.nui.openApp(appId, {

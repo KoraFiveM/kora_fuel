@@ -165,4 +165,30 @@ harness.test('charging stations use their own price and rate; pumps and petrol a
     Config.charging.pricePerPercent, Config.charging.secondsPerPercent = saved[1], saved[2]
 end)
 
+harness.test('totals round to whole dollars by Config.priceRounding without float noise', function()
+    local saved = { Config.charging.pricePerPercent, Config.pricePerUnit.fuel }
+    Config.charging.pricePerPercent = 1.25
+    harness.assertEqual(Fuel.exactPrice('charge', 1, 'charger'), 1.25)
+    harness.assertEqual(Fuel.price('charge', 1, 'charger'), 2, 'default rounds up')
+    harness.assertEqual(Fuel.price('charge', 4, 'charger'), 5, 'whole totals are unchanged')
+    Config.priceRounding = 'nearest'
+    harness.assertEqual(Fuel.price('charge', 1, 'charger'), 1)
+    harness.assertEqual(Fuel.price('charge', 2, 'charger'), 3)
+    Config.priceRounding = 'down'
+    harness.assertEqual(Fuel.price('charge', 3, 'charger'), 3)
+    Config.priceRounding = 'bogus'
+    harness.assertEqual(Fuel.price('charge', 1, 'charger'), 2, 'an unknown mode rounds up')
+    Config.priceRounding = 'up'
+    Config.pricePerUnit.fuel = 1.1
+    harness.assertEqual(Fuel.price('fuel', 100), 110, '100 x 1.1 must not round up to 111')
+    harness.assertEqual(math.type(Fuel.price('fuel', 3)), 'integer')
+    Config.charging.pricePerPercent, Config.pricePerUnit.fuel = saved[1], saved[2]
+end)
+
+harness.test('Grapeseed pumps (prop_gas_pump_old3) are serviceable', function()
+    local listed = false
+    for _, name in ipairs(Config.pumpModels) do listed = listed or name == 'prop_gas_pump_old3' end
+    harness.assertTrue(listed)
+end)
+
 harness.report('qbfuel shared')
