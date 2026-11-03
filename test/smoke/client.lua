@@ -7,16 +7,43 @@ local harness = require('harness')
 vector3 = function(x, y, z) return { x = x, y = y, z = z } end
 joaat = function(model) return model end
 local nativeExports, legacyEvents = {}, {}
-exports = function(name, fn) nativeExports[name] = fn end
+local zones = {}
+exports = setmetatable({
+    kora_target = { addSphereZone = function(_, zone) zones[#zones + 1] = zone end },
+}, { __call = function(_, name, fn) nativeExports[name] = fn end })
 AddEventHandler = function(name, fn) legacyEvents[name] = fn end
 RegisterNetEvent = function() end
-CreateThread = function() end
+-- Minimal scheduler: each thread is a coroutine, Wait yields, advance() resumes them once.
+local threads, cacheState, cacheHandlers = {}, { vehicle = false, seat = false }, {}
+CreateThread = function(fn) threads[#threads + 1] = coroutine.create(fn) end
+Wait = function() coroutine.yield() end
+local function advance()
+    for i = #threads, 1, -1 do
+        local ok, err = coroutine.resume(threads[i])
+        if not ok then error(err, 0) end
+        if coroutine.status(threads[i]) == 'dead' then table.remove(threads, i) end
+    end
+end
+local function setCache(key, value)
+    local old = cacheState[key]
+    cacheState[key] = value
+    for _, fn in ipairs(cacheHandlers[key] or {}) do fn(value, old) end
+end
 PlayerPedId = function() return 1 end
 -- Stand in for FiveM vector subtraction; the vehicle is parked at the pump.
-GetEntityCoords = function() return setmetatable({}, { __sub = function() return '' end }) end
+local pedPos = { x = 0.0, y = 0.0, z = 0.0 }
+GetEntityCoords = function()
+    return setmetatable({ x = pedPos.x, y = pedPos.y, z = pedPos.z }, { __sub = function() return '' end })
+end
+local clock = 0
+GetGameTimer = function() return clock end
 DoesEntityExist = function() return true end
-GetIsVehicleEngineRunning = function() return false end
+local engineOn, engineOff = false, 0
+GetIsVehicleEngineRunning = function() return engineOn end
 local fuelLevel, controlRequested = 60, nil
+GetVehicleClass = function() return 1 end
+GetEntitySpeed = function() return 20.0 end
+SetVehicleEngineOn = function() engineOff = engineOff + 1 end
 GetVehicleFuelLevel = function() return fuelLevel end
 SetVehicleFuelLevel = function(_, level) fuelLevel = level end
 NetworkRequestControlOfEntity = function(vehicle) controlRequested = vehicle end
@@ -26,16 +53,20 @@ local model = 'adder'
 GetEntityModel = function() return model end
 
 local openMenu, app, openData, purchase
-local cacheHandlers, cacheVehicle, cacheSeat = {}, false, false
+local notices, vehicleScans = {}, 0
 Kora = {
-    notify = { send = function() error('Unexpected notification') end },
-    closest = { vehicle = function() return { id = 2 } end },
+    notify = { send = function(notice) notices[#notices + 1] = notice end },
+    closest = { vehicle = function() vehicleScans = vehicleScans + 1 return { id = 2 } end },
     interact = { addModel = function(_, options) openMenu = options[1].action end },
     callback = { register = function() end },
     cache = {
-        onChange = function(key, fn) cacheHandlers[key] = cacheHandlers[key] or {}; table.insert(cacheHandlers[key], fn) end,
-        vehicle = function() return cacheVehicle end,
-        seat = function() return cacheSeat end,
+        ped = function() return 1 end,
+        vehicle = function() return cacheState.vehicle end,
+        seat = function() return cacheState.seat end,
+        onChange = function(key, fn)
+            cacheHandlers[key] = cacheHandlers[key] or {}
+            table.insert(cacheHandlers[key], fn)
+        end,
     },
     nui = {
         registerApp = function(definition) app = definition end,
@@ -50,16 +81,29 @@ dofile(repoRoot .. 'config.lua')
 dofile(repoRoot .. 'shared/fuel.lua')
 dofile(repoRoot .. 'client/main.lua')
 
+local stationOne = Config.charging.stations[1].coords
+local function standAtCharger() pedPos = { x = stationOne.x, y = stationOne.y, z = stationOne.z } end
+local function openCharger() zones[1].options[1].onSelect() end
+
 harness.test('fuel and charging totals track the selected amount without purchasing', function()
-    for _, kind in ipairs({ 'fuel', 'charge' }) do
-        model = kind == 'charge' and 'neon' or 'adder'
-        openMenu()
+    local cases = {
+        { kind = 'fuel', site = 'pump', model = 'adder' },
+        { kind = 'charge', site = 'charger', model = 'neon' },
+        { kind = 'charge', site = 'pump', model = 'neon', allowAtPumps = true },
+    }
+    for _, case in ipairs(cases) do
+        local kind, site = case.kind, case.site
+        model = case.model
+        Config.charging.allowAtPumps = case.allowAtPumps == true
+        standAtCharger()
+        if site == 'charger' then openCharger() else openMenu() end
+        harness.assertEqual(openData.site, site)
         local total = app.navigation[1].content.blocks[2].items[2]
         harness.assertEqual(total.label, 'Total Price')
-        harness.assertEqual(total.value, ('$%d'):format(Fuel.price(kind, 40)))
+        harness.assertEqual(total.value, ('$%d'):format(Fuel.price(kind, 40, site)))
         local update = app.onChange('fuel-submit', { value = { quantity = 7, account = 'bank' } })
         harness.assertEqual(update.navigation[1].content.blocks[2].items[2].value,
-            ('$%d'):format(Fuel.price(kind, 7)))
+            ('$%d'):format(Fuel.price(kind, 7, site)))
         harness.assertEqual(total.description, '7 units')
         harness.assertEqual(purchase, nil, 'an edit must not trigger a purchase')
         for _, invalid in ipairs({ '', 0, 41, 1.5, math.huge, 0 / 0 }) do
@@ -67,6 +111,8 @@ harness.test('fuel and charging totals track the selected amount without purchas
         end
         harness.assertEqual(total.description, '7 units', 'invalid edits must leave the total alone')
     end
+    harness.assertEqual(#notices, 0, 'no refusal or error is shown for valid services')
+    Config.charging.allowAtPumps = false
 end)
 
 harness.test('submitting still sends the quantity and account to the existing purchase event', function()
@@ -77,6 +123,123 @@ harness.test('submitting still sends the quantity and account to the existing pu
     harness.assertEqual(purchase[3], 'bank')
     harness.assertEqual(purchase[4], 7)
     harness.assertEqual(purchase[5], 60)
+    harness.assertEqual(purchase[6], 'pump')
+end)
+
+harness.test('the charging menu shows the station, uses station pricing and sends the charger site', function()
+    local saved = Config.charging.pricePerPercent
+    Config.charging.pricePerPercent = 3.0
+    model = 'neon'
+    standAtCharger()
+    openCharger()
+    harness.assertEqual(app.title, 'Charge vehicle')
+    harness.assertEqual(app.description, 'Battery charge - ' .. Config.charging.stations[1].label)
+    harness.assertEqual(app.navigation[1].content.blocks[2].items[1].value, '$3.00')
+    harness.assertEqual(app.navigation[1].content.blocks[2].items[2].value, '$120')
+    app.onAction('fuel-submit', { data = openData, value = { quantity = 7, account = 'cash' } })
+    harness.assertEqual(purchase[6], 'charger')
+    Config.charging.pricePerPercent = saved
+end)
+
+harness.test('petrol pumps send EVs to the nearest charging station instead of opening a menu', function()
+    model = 'neon'
+    app, notices = nil, {}
+    local at = Config.charging.stations[2].coords
+    pedPos = { x = at.x + 100.0, y = at.y, z = at.z }
+    openMenu()
+    harness.assertEqual(app, nil, 'no charge menu at a petrol pump')
+    harness.assertEqual(#notices, 1)
+    harness.assertEqual(notices[1].message, Config.charging.pumpMessage .. ' Nearest: ' ..
+        Config.charging.stations[2].label .. ' (100 m).')
+
+    Config.charging.pumpMessage = 'Use a charger.'
+    pedPos = { x = at.x + 2500.0, y = at.y, z = at.z }
+    notices = {}
+    openMenu()
+    harness.assertTrue(notices[1].message:find('Use a charger. Nearest: ', 1, true) ~= nil)
+    harness.assertTrue(notices[1].message:find('2.5 km', 1, true) ~= nil)
+    Config.charging.pumpMessage = 'Electric vehicles cannot use petrol pumps. Use an EV charging station.'
+
+    notices, model = {}, 'adder'
+    openMenu()
+    harness.assertTrue(app ~= nil, 'petrol vehicles are still serviced at pumps')
+    harness.assertEqual(#notices, 0)
+end)
+
+harness.test('charging stations refuse petrol vehicles and far-away players', function()
+    app, notices = nil, {}
+    model = 'adder'
+    standAtCharger()
+    openCharger()
+    harness.assertEqual(app, nil)
+    harness.assertEqual(notices[1].message, 'Charging stations are for electric vehicles only.')
+
+    notices, model = {}, 'neon'
+    pedPos = { x = stationOne.x + 500.0, y = stationOne.y, z = stationOne.z }
+    openCharger()
+    harness.assertEqual(app, nil)
+    harness.assertEqual(notices[1].message, 'Move to an EV charging station first.')
+    standAtCharger()
+end)
+
+harness.test('every charging station gets one target zone with its own or the default radius', function()
+    harness.assertEqual(#zones, #Config.charging.stations)
+    for i, station in ipairs(Config.charging.stations) do
+        harness.assertEqual(zones[i].coords, station.coords)
+        harness.assertEqual(zones[i].radius, (station.radius or 0) > 0 and station.radius or Config.charging.zoneRadius)
+        harness.assertEqual(zones[i].distance, Config.charging.interactDistance)
+    end
+    harness.assertEqual(zones[1].options[1].label, 'Charge vehicle')
+    harness.assertEqual(zones[1].drawSprite, true, 'zones show the kora_target world icon by default')
+end)
+
+harness.test('the isElectricVehicle export asks the native with the model hash and falls back to the list', function()
+    local isElectric = nativeExports.isElectricVehicle
+    harness.assertTrue(isElectric ~= nil, 'export registered')
+    local asked
+    GetIsVehicleElectric = function(arg) asked = arg return arg == 'future_ev' end
+    model = 'future_ev'
+    harness.assertTrue(isElectric(2), 'a model only the game knows as electric counts')
+    harness.assertEqual(asked, 'future_ev', 'the native takes the model hash, not the entity')
+    model = 'adder'
+    harness.assertFalse(isElectric(2))
+    GetIsVehicleElectric = nil
+    model = 'envisage'
+    harness.assertTrue(isElectric(2), 'listed EVs count without the native')
+end)
+
+harness.test('the pump message names whichever station is nearest the player, wherever they are', function()
+    model = 'neon'
+    for _, station in ipairs(Config.charging.stations) do
+        app, notices = nil, {}
+        pedPos = { x = station.coords.x + 30.0, y = station.coords.y, z = station.coords.z }
+        openMenu()
+        harness.assertTrue(notices[1].message:find('Nearest: ' .. station.label .. ' (30 m).', 1, true) ~= nil,
+            'pump near ' .. station.label .. ' should name it')
+    end
+    standAtCharger()
+end)
+
+harness.test('the charge option only shows near an electric vehicle and is memoised', function()
+    local canInteract = zones[1].options[1].canInteract
+    clock, vehicleScans = 1000, 0
+    model = 'neon'
+    harness.assertTrue(canInteract(), 'on foot beside an EV')
+    harness.assertEqual(vehicleScans, 1)
+    canInteract(); canInteract()
+    harness.assertEqual(vehicleScans, 1, 'repeated resolver ticks reuse the last answer')
+
+    clock, model = 1600, 'adder'
+    harness.assertFalse(canInteract(), 'a petrol car does not offer a charge')
+
+    clock, vehicleScans = 2200, 0
+    model = 'neon'
+    setCache('vehicle', 2)
+    harness.assertTrue(canInteract(), 'sitting in an EV')
+    harness.assertEqual(vehicleScans, 0, 'the cached vehicle replaces the world scan')
+    clock, model = 2800, 'adder'
+    harness.assertFalse(canInteract())
+    setCache('vehicle', false)
 end)
 
 harness.test('LegacyFuel aliases preserve fractional reads and nil writes without changing native exports', function()
@@ -121,42 +284,75 @@ harness.test('qb-fuel, ps-fuel and cdn-fuel share the LegacyFuel behaviour', fun
     end
 end)
 
-harness.test('consumption runs only while driving, one worker, and follows kora_lib restarts', function()
-    local threads = {}
-    local savedThread, savedWait = CreateThread, Wait
-    CreateThread = function(fn) threads[#threads + 1] = coroutine.create(fn) end
-    Wait = function(ms) coroutine.yield(ms) end
-    local function change(key, value)
-        if key == 'vehicle' then cacheVehicle = value else cacheSeat = value end
-        for _, fn in ipairs(cacheHandlers[key]) do fn(value) end
+harness.test('fuel consumption only runs while driving and starts and stops on cache changes', function()
+    harness.assertEqual(#threads, 0, 'no worker may exist on foot')
+    setCache('vehicle', 2)
+    harness.assertEqual(#threads, 0, 'a vehicle without the driver seat must not start the worker')
+    setCache('seat', 0)
+    harness.assertEqual(#threads, 0)
+    setCache('seat', -1)
+    harness.assertEqual(#threads, 1, 'driving starts exactly one worker')
+    setCache('vehicle', 3)
+    setCache('seat', -1)
+    harness.assertEqual(#threads, 1, 'repeated changes must not stack workers')
+
+    advance() -- run the new worker up to its first Wait
+    fuelLevel, engineOn = 60, false
+    advance()
+    harness.assertEqual(fuelLevel, 60, 'engine off consumes nothing')
+    engineOn = true
+    advance()
+    harness.assertTrue(fuelLevel < 60, 'engine running consumes fuel')
+
+    fuelLevel = 0
+    advance()
+    harness.assertEqual(engineOff, 1, 'empty tank cuts the engine')
+
+    setCache('seat', 1)
+    advance()
+    harness.assertEqual(#threads, 0, 'worker exits once the player is no longer the driver')
+    fuelLevel = 60
+    advance()
+    harness.assertEqual(fuelLevel, 60, 'no consumption after leaving the driver seat')
+
+    setCache('seat', -1)
+    harness.assertEqual(#threads, 1, 'worker restarts when driving again')
+    setCache('vehicle', false)
+    advance() -- first Wait
+    advance()
+    harness.assertEqual(#threads, 0, 'worker exits when leaving the vehicle')
+end)
+
+harness.test('kora_lib restart re-registers listeners, re-seeds and never duplicates workers', function()
+    for _, key in ipairs({ 'vehicle', 'seat', 'ped' }) do
+        harness.assertEqual(#cacheHandlers[key], 1, 'normal load registers exactly one ' .. key .. ' handler')
     end
-    harness.assertEqual(#threads, 0, 'no consumption poll on foot')
-    change('seat', 0); change('vehicle', 2)
-    harness.assertEqual(#threads, 0, 'passengers burn no fuel and start no worker')
-    change('seat', -1)
-    harness.assertEqual(#threads, 1, 'becoming the driver starts the worker')
-    local running, used = true, nil
-    GetIsVehicleEngineRunning = function() return running end
-    GetVehicleClass = function() return 0 end
-    GetEntitySpeed = function() return 20 end
-    SetVehicleEngineOn = function() end
-    fuelLevel = 50
-    local _, ms = coroutine.resume(threads[1])
-    harness.assertEqual(ms, Config.consumeInterval, 'worker sleeps the consume interval first')
-    coroutine.resume(threads[1])
-    harness.assertTrue(fuelLevel < 50, 'driving with the engine on consumes fuel')
-    used = fuelLevel
-    change('seat', false)
-    coroutine.resume(threads[1])
-    harness.assertEqual(coroutine.status(threads[1]), 'dead', 'leaving the driver seat ends the worker')
-    harness.assertEqual(fuelLevel, used, 'no consumption after leaving')
-    change('vehicle', false)
-    change('seat', -1); change('vehicle', 2)
-    harness.assertEqual(#threads, 2, 'entering as driver starts one fresh worker')
+    harness.assertEqual(#threads, 0)
+    setCache('vehicle', 2); setCache('seat', -1)
+    harness.assertEqual(#threads, 1)
+
+    -- kora_lib restarts: its registrations are gone, the cached values persist.
+    cacheHandlers = {}
+    legacyEvents.onClientResourceStart('other_resource')
+    harness.assertEqual(next(cacheHandlers), nil, 'unrelated resource starts change nothing')
     legacyEvents.onClientResourceStart('kora_lib')
-    harness.assertEqual(#threads, 2, 're-seeding while still driving never duplicates the worker')
-    harness.assertEqual(#cacheHandlers.vehicle, 2, 'kora_lib restart re-registers the listeners')
-    CreateThread, Wait, GetIsVehicleEngineRunning = savedThread, savedWait, function() return false end
+    for _, key in ipairs({ 'vehicle', 'seat', 'ped' }) do
+        harness.assertEqual(#cacheHandlers[key], 1, 'restart re-registers one ' .. key .. ' handler')
+    end
+    harness.assertEqual(#threads, 1, 're-seeding while the worker runs must not start another')
+
+    -- Worker ends, then kora_lib restarts while the player is still driving: seeding restarts it.
+    setCache('vehicle', false); setCache('seat', false)
+    advance(); advance()
+    harness.assertEqual(#threads, 0)
+    cacheState.vehicle, cacheState.seat = 2, -1
+    cacheHandlers = {}
+    legacyEvents.onClientResourceStart('kora_lib')
+    harness.assertEqual(#threads, 1, 'seeding from the current cache starts the worker')
+    setCache('seat', false)
+    advance(); advance()
+    harness.assertEqual(#threads, 0)
+    setCache('vehicle', false)
 end)
 
 harness.report('qbfuel client')

@@ -21,6 +21,38 @@ harness.test('electric-model classification includes stock EVs and excludes petr
     harness.assertTrue(Fuel.isElectricModel(joaat('raiden')), 'hashed electric models should work')
 end)
 
+harness.test('electric list covers newer EVs and has no duplicates', function()
+    for _, m in ipairs({ 'envisage', 'virtue', 'coureur', 'buffalo5', 'inductor2', 'estride', 'cyclone2' }) do
+        harness.assertTrue(Fuel.isElectricModel(m), m .. ' should be electric')
+    end
+    local seen = {}
+    for _, m in ipairs(Config.electricVehicles) do
+        harness.assertFalse(seen[m] == true, m .. ' listed twice')
+        seen[m] = true
+    end
+    harness.assertTrue(Config.electric.useNative, 'native detection defaults on')
+end)
+
+harness.test('replacing the electric list (late client config) is picked up', function()
+    local authored = Config.electricVehicles
+    harness.assertFalse(Fuel.isElectricModel('adder'))
+    Config.electricVehicles = { 'adder', ' Neon ' }
+    harness.assertTrue(Fuel.isElectricModel('adder'), 'an owner-added model should count')
+    harness.assertFalse(Fuel.isElectricModel('envisage'), 'a removed model should stop counting')
+    Config.electricVehicles = authored
+    harness.assertTrue(Fuel.isElectricModel('envisage'))
+    harness.assertFalse(Fuel.isElectricModel('adder'))
+end)
+
+harness.test('every vehicle on the requested EV list is electric', function()
+    for _, m in ipairs({ 'voltic', 'voltic2', 'caddy', 'caddy2', 'caddy3', 'surge', 'iwagen', 'raiden', 'airtug', 'neon',
+        'omnisegt', 'cyclone', 'tezeract', 'rcbandito', 'imorgon', 'dilettante', 'dilettante2', 'khamelion', 'suzume',
+        'inductor', 'inductor2', 'powersurge', 'buffalo5', 'envisage', 'coureur', 'pipistrello', 'virtue', 'xtreme',
+        'vivanite2', 'estride' }) do
+        harness.assertTrue(Fuel.isElectricModel(m), m .. ' should be electric')
+    end
+end)
+
 harness.test('fuel level is clamped to the native 0-100 range', function()
     harness.assertEqual(Fuel.clampLevel(-5), 0)
     harness.assertEqual(Fuel.clampLevel(150), Config.maxLevel)
@@ -49,6 +81,60 @@ harness.test('only configured payment accounts are accepted', function()
     harness.assertTrue(Fuel.isPaymentAccount('cash'))
     harness.assertTrue(Fuel.isPaymentAccount('bank'))
     harness.assertFalse(Fuel.isPaymentAccount('crypto'))
+end)
+
+harness.test('default charging stations are labelled, unique and carry usable coordinates', function()
+    harness.assertTrue(Fuel.chargingEnabled())
+    harness.assertTrue(#Config.charging.stations >= 5, 'a handful of stations is expected')
+    local seen = {}
+    for _, station in ipairs(Config.charging.stations) do
+        harness.assertTrue(type(station.label) == 'string' and #station.label > 0, 'station needs a label')
+        harness.assertFalse(seen[station.label] == true, station.label .. ' listed twice')
+        seen[station.label] = true
+        for _, axis in ipairs({ 'x', 'y', 'z' }) do
+            harness.assertTrue(type(station.coords[axis]) == 'number', station.label .. ' needs numeric ' .. axis)
+        end
+    end
+end)
+
+harness.test('nearestCharger honours the maximum distance', function()
+    local first = Config.charging.stations[1]
+    local at = { x = first.coords.x + 3.0, y = first.coords.y, z = first.coords.z }
+    local station, distance = Fuel.nearestCharger(at, Config.charging.serviceRadius)
+    harness.assertEqual(station, first)
+    harness.assertTrue(math.abs(distance - 3.0) < 1e-6)
+    local far = { x = 99999.0, y = 99999.0, z = 0.0 }
+    harness.assertEqual(Fuel.nearestCharger(far, Config.charging.serviceRadius), nil)
+    harness.assertTrue(Fuel.nearestCharger(far) ~= nil, 'without a limit the nearest station is still reported')
+end)
+
+harness.test('pumps refuse EVs only while a charging network is enabled and pumps are not allowed', function()
+    harness.assertFalse(Fuel.pumpsAcceptElectric(), 'default: EVs are sent to charging stations')
+    Config.charging.allowAtPumps = true
+    harness.assertTrue(Fuel.pumpsAcceptElectric())
+    Config.charging.allowAtPumps = false
+    Config.charging.enabled = false
+    harness.assertTrue(Fuel.pumpsAcceptElectric(), 'no network, pumps keep charging')
+    Config.charging.enabled = true
+    local stations = Config.charging.stations
+    Config.charging.stations = {}
+    harness.assertTrue(Fuel.pumpsAcceptElectric(), 'no stations listed, pumps keep charging')
+    Config.charging.stations = stations
+end)
+
+harness.test('charging stations use their own price and rate; pumps and petrol are unchanged', function()
+    local saved = { Config.charging.pricePerPercent, Config.charging.secondsPerPercent }
+    Config.charging.pricePerPercent, Config.charging.secondsPerPercent = 2.0, 0.5
+    harness.assertEqual(Fuel.price('charge', 40, 'charger'), 80)
+    harness.assertEqual(Fuel.price('charge', 40, 'pump'), math.ceil(40 * Config.pricePerUnit.charge))
+    harness.assertEqual(Fuel.price('charge', 40), math.ceil(40 * Config.pricePerUnit.charge))
+    harness.assertEqual(Fuel.price('fuel', 40, 'charger'), math.ceil(40 * Config.pricePerUnit.fuel))
+    harness.assertEqual(Fuel.unitPrice('charge', 'charger'), 2.0)
+    harness.assertEqual(Fuel.progressDuration(40, 'charge', 'charger'), 20000)
+    harness.assertEqual(Fuel.progressDuration(40, 'charge', 'pump'), 40 * Config.progressMsPerUnit)
+    harness.assertEqual(Fuel.progressDuration(40), 40 * Config.progressMsPerUnit)
+    harness.assertEqual(Fuel.progressDuration(1, 'charge', 'charger'), Config.minimumProgressMs, 'minimum duration still applies')
+    Config.charging.pricePerPercent, Config.charging.secondsPerPercent = saved[1], saved[2]
 end)
 
 harness.report('qbfuel shared')

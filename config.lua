@@ -44,13 +44,25 @@ Config.consumePerSecond = {
     [20] = 0.080, -- commercial
 }
 
--- GTA's electric models. Add addon EV spawn names here; the model check is
--- shared by the server, fuel drain, and HUD, so every part stays in agreement.
+-- GTA's electric models. This is the single source of truth: the server
+-- (pricing/validation), pump wording and the HUD (via the isElectricVehicle
+-- export) all read it. Add addon EV spawn names here. Models released in
+-- newer GTA builds are also picked up by Config.electric.useNative below, so
+-- this list only has to cover addons and older game builds.
 Config.electricVehicles = {
-    'airtug', 'caddy', 'caddy2', 'caddy3', 'cyclone', 'cyclone2',
-    'dilettante', 'dilettante2', 'imorgon', 'iwagen', 'khamelion',
-    'neon', 'omnisegt', 'powersurge', 'raiden', 'rcbandito', 'surge',
-    'tezeract', 'voltic', 'voltic2',
+    'airtug', 'buffalo5', 'caddy', 'caddy2', 'caddy3', 'coureur', 'cyclone',
+    'cyclone2', 'dilettante', 'dilettante2', 'envisage', 'estride', 'imorgon',
+    'inductor', 'inductor2', 'iwagen', 'khamelion', 'neon', 'omnisegt',
+    'pipistrello', 'powersurge', 'raiden', 'rcbandito', 'surge', 'suzume',
+    'tezeract', 'virtue', 'vivanite2', 'voltic', 'voltic2', 'xtreme',
+}
+
+Config.electric = {
+    -- Also ask the game (GetIsVehicleElectric) whether a vehicle is electric,
+    -- on the client, once per vehicle model. Affects the HUD icon and the
+    -- "Charge vehicle" pump wording only; server pricing and validation stay
+    -- on Config.electricVehicles. Ignored on game builds without the native.
+    useNative = true,
 }
 
 -- Pump models cover the standard GTA petrol forecourts. Their interaction
@@ -97,6 +109,74 @@ Config.blips = {
     label = 'Gas Station',
     mergeRadius = 30.0,
     perStation = {},
+}
+
+-- Dedicated EV charging stations. Each entry is a spot where an electric
+-- vehicle can park and charge: the "Charge vehicle" target option appears when
+-- aiming (hold Alt) at a point within `radius` metres of `coords`, and only
+-- while an electric vehicle is within Config.vehicleSearchDistance of the
+-- player. The server also checks the player is within `serviceRadius` of a
+-- station before taking payment, so this list is an authorization boundary.
+-- Coordinates are road and car-park positions already used elsewhere on this
+-- server (kora_garages parking bays, kora_taxi road stops); `coords` sits about
+-- half a metre above the ground. The Legion Square Parking station is centred on
+-- the middle of the kora_garages bay row there (radius 8 covers the row). Add,
+-- move or remove entries freely; `radius` is optional (0 or omitted uses
+-- `zoneRadius`).
+Config.charging = {
+    -- Master switch. When false (or when no stations are listed) there is no
+    -- charging network and petrol pumps keep servicing EVs as before.
+    enabled = true,
+    -- false: an EV used at a petrol pump gets `pumpMessage` and the nearest
+    -- station instead of a charge menu. true: pumps charge EVs at
+    -- Config.pricePerUnit.charge as well.
+    allowAtPumps = false,
+    pumpMessage = 'Electric vehicles cannot use petrol pumps. Use an EV charging station.',
+    -- Station price per 1% of charge, and how long 1% takes to charge. The
+    -- server prices and times the purchase itself; the client only displays it.
+    pricePerPercent = 1.25,
+    secondsPerPercent = 0.25,
+    -- Server-side range (metres) from a station within which charging is paid.
+    serviceRadius = 15.0,
+    -- Default target zone radius and the maximum aim distance (metres).
+    zoneRadius = 4.0,
+    interactDistance = 5.0,
+    -- Optional charger prop models (custom map assets) that also offer the
+    -- charge option within a station's service radius. Empty by default: GTA V
+    -- has no vanilla EV charger prop, so the default stations are zone-only.
+    propModels = {},
+    -- Draw kora_target's world icon at every station while the player is within
+    -- Config.target.sprites.drawDistance, so the spot is visible before aiming.
+    -- It is a display hint only; the interaction itself is unchanged.
+    worldIcon = true,
+    stations = {
+        { label = 'Legion Square Parking', coords = vector3(211.37, -789.13, 30.4), radius = 8.0 },
+        { label = 'Alta Street Parking', coords = vector3(270.94, -322.96, 44.4), radius = 4.0 },
+        { label = 'Sandy Shores Parking', coords = vector3(1735.0, 3714.3, 34.6), radius = 4.0 },
+        { label = 'Rockford Plaza', coords = vector3(-586.48, -255.96, 36.4), radius = 5.0 },
+        { label = 'Vespucci Canals', coords = vector3(-1184.3, -1304.16, 5.7), radius = 5.0 },
+        { label = 'Del Perro Pier', coords = vector3(-1613.99, -1015.82, 13.6), radius = 5.0 },
+        { label = 'Los Santos Airport', coords = vector3(-1053.23, -2716.2, 14.2), radius = 5.0 },
+        { label = 'Chumash Plaza', coords = vector3(-3232.7, 1013.16, 12.6), radius = 5.0 },
+        { label = 'Grapeseed Main Street', coords = vector3(1662.55, 4876.71, 42.5), radius = 5.0 },
+        { label = 'Paleto Bay', coords = vector3(-9.51, 6529.67, 31.9), radius = 5.0 },
+    },
+    -- Map blips, one per station, created through Kora.blips so players can
+    -- also hide them with /blips. `sprite` and `colour` are GTA blip ids
+    -- (354 / 46 by default). The legend entry reads `label`, followed by the
+    -- station name when `showStationName` is true. `category` is a fixed
+    -- Kora.blips pause-map category. shortRange = false keeps the blips on the
+    -- minimap at any distance, which helps drivers find the nearest station.
+    blips = {
+        enabled = true,
+        sprite = 354,
+        colour = 46,
+        scale = 0.8,
+        shortRange = false,
+        label = 'EV Charging Station',
+        showStationName = true,
+        category = 'Fuel',
+    },
 }
 
 -- Registers this resource-owned configuration with kora_lib without changing its public Config table.
@@ -210,6 +290,10 @@ if Kora and Kora.config and Kora.config.adopt then
             label = 'Electric vehicle models',
             description = 'Lists GTA and add-on vehicle spawn names that use battery charge rather than petrol. The same list controls pump wording, server-side service validation, fuel drain, and the HUD fuel presentation.',
         })
+    Config.electric.useNative = Kora.config.boolean(Config.electric.useNative, {
+        label = 'Detect electric vehicles with the game native',
+        description = 'Also asks the game whether a vehicle is electric, so new GTA electric models show the charge icon and Charge vehicle pump wording without being listed. Pricing and server validation still use the electric vehicle model list. Has no effect on game builds without the native.',
+    })
     Config.pumpModels = Kora.config.list(Config.pumpModels,
         Kora.config.string('', { minLength = 1 }), {
             label = 'Fuel pump models',
@@ -254,6 +338,107 @@ if Kora and Kora.config and Kora.config.adopt then
         minLength = 1,
         label = 'Gas station blip label',
         description = 'Sets the text shown for gas station blips on the map legend.',
+    })
+    Config.charging.enabled = Kora.config.boolean(Config.charging.enabled, {
+        label = 'Enable EV charging stations',
+        description = 'Turns on the dedicated electric vehicle charging stations. When off, or when no stations are listed, petrol pumps keep charging electric vehicles as they did before charging stations existed.',
+    })
+    Config.charging.allowAtPumps = Kora.config.boolean(Config.charging.allowAtPumps, {
+        label = 'Charge EVs at petrol pumps',
+        description = 'When off, an electric vehicle at a petrol pump is told to use a charging station instead of being offered a charge. Turn this on to let pumps charge electric vehicles at the standard electric charge price as well. Only applies while charging stations are enabled.',
+    })
+    Config.charging.pumpMessage = Kora.config.string(Config.charging.pumpMessage, {
+        minLength = 1,
+        label = 'Petrol pump message for electric vehicles',
+        description = 'Sets the notification shown to a player who uses a petrol pump with an electric vehicle when pumps do not charge EVs. The nearest charging station and its distance are appended automatically.',
+    })
+    Config.charging.pricePerPercent = Kora.config.number(Config.charging.pricePerPercent, {
+        min = 0,
+        step = 0.01,
+        label = 'Charging station price per percent',
+        description = 'Sets the amount charged from the selected player account for each percent of battery charge added at a charging station. The server calculates the price from the vehicle’s authoritative current level.',
+    })
+    Config.charging.secondsPerPercent = Kora.config.number(Config.charging.secondsPerPercent, {
+        min = 0,
+        step = 0.01,
+        label = 'Charging time per percent (seconds)',
+        description = 'Sets how many seconds each percent of missing charge adds to the charging progress at a charging station. The minimum service duration still applies.',
+    })
+    Config.charging.serviceRadius = Kora.config.number(Config.charging.serviceRadius, {
+        advanced = true,
+        min = 1.0,
+        step = 0.5,
+        label = 'Charging station service radius',
+        description = 'Sets the maximum distance in metres between the player and a charging station before the server refuses a paid charge. Keep it larger than the station target zones so the whole parking area is covered.',
+    })
+    Config.charging.zoneRadius = Kora.config.number(Config.charging.zoneRadius, {
+        min = 0.5,
+        step = 0.5,
+        label = 'Default charging zone radius',
+        description = 'Sets the radius in metres of a charging station’s target zone when the station does not set its own. Players aim at a point inside this sphere to see the charge option.',
+    })
+    Config.charging.interactDistance = Kora.config.number(Config.charging.interactDistance, {
+        min = 0.5,
+        step = 0.5,
+        label = 'Charging station interaction distance',
+        description = 'Sets how close in metres the player must be to the aimed point for the charge option to appear.',
+    })
+    Config.charging.propModels = Kora.config.list(Config.charging.propModels,
+        Kora.config.string('', { minLength = 1 }), {
+            label = 'Charger prop models',
+            description = 'Lists optional world prop model names, such as custom map EV chargers, that offer the charge option when they are inside a charging station’s service radius. Leave empty to use the station target zones only.',
+        })
+    Config.charging.stations = Kora.config.list(Config.charging.stations,
+        Kora.config.object({
+            label = Kora.config.string('Charging station', { minLength = 1 }),
+            coords = Kora.config.vector3(vector3(0.0, 0.0, 0.0)),
+            radius = Kora.config.number(0.0, { min = 0.0, step = 0.5 }),
+        }), {
+            label = 'EV charging stations',
+            description = 'Lists the charging stations: a name shown on the map and in messages, the world position about half a metre above the ground, and an optional target zone radius in metres (0 uses the default zone radius). The server only takes payment for charging near these positions.',
+        })
+    Config.charging.blips.enabled = Kora.config.boolean(Config.charging.blips.enabled, {
+        label = 'Show charging station blips',
+        description = 'Shows a map blip at every charging station. Turn this off if another resource already draws them.',
+    })
+    Config.charging.blips.sprite = Kora.config.integer(Config.charging.blips.sprite, {
+        min = 0,
+        label = 'Charging station blip sprite',
+        description = 'Sets the GTA blip sprite ID used for charging stations. The default 354 is the EV charging icon, which keeps them distinct from the petrol pump blips.',
+    })
+    Config.charging.blips.colour = Kora.config.integer(Config.charging.blips.colour, {
+        min = 0,
+        label = 'Charging station blip colour',
+        description = 'Sets the GTA blip colour ID used for charging stations. The default is 46.',
+    })
+    Config.charging.blips.showStationName = Kora.config.boolean(Config.charging.blips.showStationName, {
+        label = 'Name charging stations on the map',
+        description = 'Adds the station name, such as Legion Square Parking, after the blip label in the pause-map legend. Turn this off to show only the blip label.',
+    })
+    Config.charging.blips.category = Kora.config.string(Config.charging.blips.category, {
+        minLength = 1,
+        advanced = true,
+        label = 'Charging station blip category',
+        description = 'Sets the fixed kora_lib pause-map category the charging station blips are listed under, for example Fuel or Garage. Players can hide the whole category with /blips.',
+    })
+    Config.charging.worldIcon = Kora.config.boolean(Config.charging.worldIcon, {
+        label = 'Show world icon at charging stations',
+        description = 'Draws the kora_target interaction icon at each charging station when the player is nearby, so the spot is visible before aiming at it. The interaction works the same with it off.',
+    })
+    Config.charging.blips.scale = Kora.config.number(Config.charging.blips.scale, {
+        min = 0.1,
+        step = 0.1,
+        label = 'Charging station blip scale',
+        description = 'Sets the size of charging station blips on the map.',
+    })
+    Config.charging.blips.shortRange = Kora.config.boolean(Config.charging.blips.shortRange, {
+        label = 'Short-range charging station blips',
+        description = 'When enabled, charging station blips only show near the player or on the full map instead of across the whole minimap.',
+    })
+    Config.charging.blips.label = Kora.config.string(Config.charging.blips.label, {
+        minLength = 1,
+        label = 'Charging station blip label',
+        description = 'Sets the text shown for charging station blips on the map legend.',
     })
     Config = Kora.config.adopt(Config)
 end

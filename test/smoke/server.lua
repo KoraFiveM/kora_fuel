@@ -6,6 +6,7 @@ package.path = testDir .. '?.lua;' .. package.path
 local harness = require('harness')
 local events, payments, pushes, progressCalls = {}, {}, {}, {}
 local balance, completed, paymentAccepted, atStation = 100, true, true, true
+local atCharger, model = false, 'adder'
 
 _G.vector3 = function(x, y, z) return { x = x, y = y, z = z } end
 _G.joaat = function(model)
@@ -57,22 +58,23 @@ _G.GetPlayerPed = function(src) return src == 1 and 10 or 0 end
 _G.DoesEntityExist = function(entity) return entity == 10 or entity == 70 end
 _G.GetEntityType = function(entity) return entity == 70 and 2 or 1 end
 _G.GetEntityCoords = function(entity)
+    if atCharger and (entity == 10 or entity == 70) then return Config.charging.stations[1].coords end
     if atStation and (entity == 10 or entity == 70) then return Config.stations[1] end
     return vector3(9999, 9999, 9999)
 end
 _G.GetPlayerRoutingBucket = function() return 0 end
 _G.GetEntityRoutingBucket = function() return 0 end
 _G.GetIsVehicleEngineRunning = function() return false end
-_G.GetEntityModel = function() return joaat('adder') end
+_G.GetEntityModel = function() return joaat(model) end
 
 dofile(repoRoot .. 'config.lua')
 dofile(repoRoot .. 'shared/fuel.lua')
 dofile(repoRoot .. 'server/main.lua')
 
-local function purchase(account, quantity, level)
+local function purchase(account, quantity, level, site)
     payments, pushes, progressCalls = {}, {}, {}
     _G.source = 1
-    events['qbfuel:server:purchase'](7, account or 'cash', quantity or 20, level or 80)
+    events['qbfuel:server:purchase'](7, account or 'cash', quantity or 20, level or 80, site)
 end
 
 harness.test('a completed purchase charges the configured price and fills the requested amount', function()
@@ -129,6 +131,77 @@ harness.test('a failed payment never fills the vehicle', function()
     harness.assertEqual(pushes[1].name, 'qbfuel:client:serviceResult')
     harness.assertFalse(pushes[1].args[1])
     paymentAccepted = true
+end)
+
+local function refused(message)
+    harness.assertEqual(#progressCalls, 0)
+    harness.assertEqual(#payments, 0)
+    harness.assertFalse(pushes[#pushes].args[1])
+    if message then harness.assertEqual(pushes[#pushes].args[2], message) end
+end
+
+harness.test('electric vehicles are refused at petrol pumps while charging stations exist', function()
+    model = 'neon'
+    purchase()
+    refused('Electric vehicles must use a charging station.')
+    purchase('cash', 20, 80, 'bogus')
+    refused('Electric vehicles must use a charging station.')
+end)
+
+harness.test('pumps charge electric vehicles when allowed or when there is no charging network', function()
+    Config.charging.allowAtPumps = true
+    purchase()
+    harness.assertEqual(payments[1].amount, Fuel.price('charge', 20))
+    Config.charging.allowAtPumps = false
+
+    Config.charging.enabled = false
+    purchase()
+    harness.assertEqual(payments[1].amount, Fuel.price('charge', 20))
+    purchase('cash', 20, 80, 'charger')
+    refused('Move closer to the service point and vehicle.')
+    Config.charging.enabled = true
+end)
+
+harness.test('charging stations bill and time electric vehicles from the charging config', function()
+    atStation, atCharger = false, true
+    Config.charging.pricePerPercent = 2.0
+    Config.charging.secondsPerPercent = 0.5
+    purchase('bank', 20, 80, 'charger')
+    harness.assertEqual(progressCalls[1][4], 10000)
+    harness.assertTrue(progressCalls[1][5], 'the progress callback is told it is a charge')
+    harness.assertEqual(#payments, 1)
+    harness.assertEqual(payments[1].amount, 40)
+    harness.assertEqual(payments[1].account, 'bank')
+    harness.assertTrue(pushes[#pushes].args[1])
+    harness.assertEqual(Fuel.price('charge', 20), 25, 'pump charge pricing is unchanged')
+end)
+
+harness.test('a charging-station request must be made at a charging station', function()
+    atStation, atCharger = true, false
+    purchase('cash', 20, 80, 'charger')
+    refused('Move closer to the service point and vehicle.')
+    atCharger = true
+    purchase('cash', 20, 80, 'pump')
+    refused('Move closer to the service point and vehicle.')
+end)
+
+harness.test('a vehicle the server does not list as electric is billed as petrol at a charger', function()
+    model = 'adder'
+    Config.charging.pricePerPercent = 1.0
+    purchase('cash', 20, 80, 'charger')
+    harness.assertEqual(progressCalls[1][4], 2500, 'petrol keeps the pump timing')
+    harness.assertEqual(payments[1].amount, Fuel.price('fuel', 20))
+    harness.assertFalse(progressCalls[1][5])
+end)
+
+harness.test('quantity and funds are still validated at charging stations', function()
+    model = 'neon'
+    purchase('cash', 21, 80, 'charger')
+    refused('Invalid fill amount.')
+    balance = 0
+    purchase('cash', 20, 80, 'charger')
+    refused('Insufficient funds.')
+    balance = 100
 end)
 
 harness.report('qbfuel server')
