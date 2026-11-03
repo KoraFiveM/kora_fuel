@@ -12,7 +12,12 @@ AddEventHandler = function(name, fn) if name == "onResourceStop" then stopHandle
 GetCurrentResourceName = function() return "kora_fuel" end
 
 local blips, nextId = {}, 0
+local coordsHandlers, playerPos = {}, { x = 0.0, y = 0.0, z = 0.0 }
 Kora = {
+    cache = {
+        coords = function() return playerPos end,
+        onChange = function(key, fn) coordsHandlers[#coordsHandlers + 1] = key == "coords" and fn or nil end,
+    },
     blips = {
         create = function(coords, options)
             nextId = nextId + 1
@@ -135,6 +140,53 @@ harness.test("mergeRadius 0 draws a blip for every station", function()
     harness.assertEqual(count(), #Config.stations)
     Config.blips.mergeRadius = 30.0
     stopHandler("kora_fuel")
+end)
+
+local function moveTo(x, y)
+    playerPos = { x = x, y = y, z = 0.0 }
+    for _, fn in ipairs(coordsHandlers) do fn(playerPos) end
+end
+
+local function only(sprite)
+    local found, n = nil, 0
+    for _, b in pairs(blips) do
+        if b.sprite == sprite then found, n = b, n + 1 end
+    end
+    return found, n
+end
+
+harness.test("nearestOnly shows one blip per set and follows the player without per-move rebuilds", function()
+    Config.blips.nearestOnly, Config.charging.blips.nearestOnly = true, true
+    Config.charging.blips.enabled = true
+    local first, last = Config.charging.stations[1], Config.charging.stations[#Config.charging.stations]
+    playerPos = { x = first.coords.x, y = first.coords.y, z = 0.0 }
+    thread()
+    local ev, evCount = only(354)
+    harness.assertEqual(evCount, 1, "one charging blip")
+    harness.assertEqual(ev.label, "EV Charging Station - " .. first.label)
+    local _, gasCount = only(361)
+    harness.assertEqual(gasCount, 1, "one gas station blip")
+    harness.assertEqual(#coordsHandlers, 1, "one coords listener")
+
+    local createdBefore = nextId
+    moveTo(first.coords.x + 10.0, first.coords.y)
+    harness.assertEqual(nextId, createdBefore, "small moves do no blip work")
+
+    moveTo(last.coords.x, last.coords.y)
+    ev, evCount = only(354)
+    harness.assertEqual(evCount, 1)
+    harness.assertEqual(ev.label, "EV Charging Station - " .. last.label, "the blip moved to the new nearest station")
+    _, gasCount = only(361)
+    harness.assertEqual(gasCount, 1)
+
+    createdBefore = nextId
+    moveTo(last.coords.x + 60.0, last.coords.y)
+    harness.assertEqual(nextId, createdBefore, "same nearest station: the blip is left alone")
+
+    Config.blips.nearestOnly, Config.charging.blips.nearestOnly = false, false
+    Config.charging.blips.enabled = false
+    stopHandler("kora_fuel")
+    harness.assertEqual(count(), 0)
 end)
 
 harness.test("disabled config creates nothing", function()

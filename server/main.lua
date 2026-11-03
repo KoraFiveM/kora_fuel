@@ -15,8 +15,9 @@ local function nearSite(coords, site)
     return nearServicePoint(coords)
 end
 
-local function sendResult(src, ok, message)
-    TriggerClientEvent('qbfuel:client:serviceResult', src, ok, message)
+-- `electric` picks the client toast title ('Charging' rather than 'Fuel').
+local function sendResult(src, ok, message, electric)
+    TriggerClientEvent('qbfuel:client:serviceResult', src, ok, message, electric == true)
 end
 
 local function vehicleFor(src, netId, site)
@@ -75,30 +76,32 @@ RegisterNetEvent('qbfuel:server:purchase', function(netId, account, quantity, cu
     if busy[src] then return end
     busy[src] = true
     site = site == 'charger' and 'charger' or 'pump'
+    local atCharger = site == 'charger'
 
     local ok, err = pcall(function()
         local info, reason = validate(src, netId, account, quantity, currentLevel, site)
-        if not info then return sendResult(src, false, reason) end
+        if not info then return sendResult(src, false, reason, atCharger) end
 
         local completed = Kora.callback.trigger(src, 'qbfuel:runProgress', netId, Fuel.progressDuration(quantity, info.kind, info.site), info.electric)
         if completed ~= true then return end
 
         info, reason = validate(src, netId, account, quantity, currentLevel, site)
-        if not info then return sendResult(src, false, reason) end
+        if not info then return sendResult(src, false, reason, atCharger) end
         Kora.print.debug(netId, account, quantity, currentLevel, info)
         local paid, payErr = exports.kora_core:removeMoney(src, account, info.price, ('%s vehicle %s'):format(info.kind, netId))
         if not paid then
-            return sendResult(src, false, payErr == 'insufficient funds' and 'Insufficient funds.' or 'Payment could not be processed.')
+            return sendResult(src, false, payErr == 'insufficient funds' and 'Insufficient funds.' or 'Payment could not be processed.',
+                info.electric)
         end
 
         TriggerClientEvent('qbfuel:client:fillVehicle', src, netId, quantity)
-        sendResult(src, true, ('Vehicle %s for $%d.'):format(info.electric and 'charged' or 'refuelled', info.price))
+        sendResult(src, true, ('Vehicle %s for $%d.'):format(info.electric and 'charged' or 'refuelled', info.price), info.electric)
     end)
 
     busy[src] = nil
     if not ok then
         print(('[qbfuel] purchase error for %s: %s'):format(src, tostring(err)))
-        sendResult(src, false, 'Payment could not be processed.')
+        sendResult(src, false, 'Payment could not be processed.', site == 'charger')
     end
 end)
 

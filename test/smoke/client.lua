@@ -12,7 +12,8 @@ exports = setmetatable({
     kora_target = { addSphereZone = function(_, zone) zones[#zones + 1] = zone end },
 }, { __call = function(_, name, fn) nativeExports[name] = fn end })
 AddEventHandler = function(name, fn) legacyEvents[name] = fn end
-RegisterNetEvent = function() end
+local netEvents = {}
+RegisterNetEvent = function(name, fn) netEvents[name] = fn end
 -- Minimal scheduler: each thread is a coroutine, Wait yields, advance() resumes them once.
 local threads, cacheState, cacheHandlers = {}, { vehicle = false, seat = false }, {}
 CreateThread = function(fn) threads[#threads + 1] = coroutine.create(fn) end
@@ -75,6 +76,14 @@ Kora = {
 }
 TriggerServerEvent = function(...) purchase = { ... } end
 
+-- Kora.lang stand-in that reads the resource's own English locale.
+local english = dofile(repoRoot .. 'locales/en.lua')
+Kora.lang = function(key)
+    local value = english
+    for part in key:gmatch('[^.]+') do value = type(value) == 'table' and value[part] or nil end
+    return value or key
+end
+
 Kora.compat = dofile(repoRoot .. '../kora_lib/compat/provider.lua')()
 
 dofile(repoRoot .. 'config.lua')
@@ -83,6 +92,7 @@ dofile(repoRoot .. 'client/main.lua')
 
 local stationOne = Config.charging.stations[1].coords
 local function standAtCharger() pedPos = { x = stationOne.x, y = stationOne.y, z = stationOne.z } end
+
 local function openCharger() zones[1].options[1].onSelect() end
 
 harness.test('fuel and charging totals track the selected amount without purchasing', function()
@@ -153,11 +163,13 @@ harness.test('petrol pumps send EVs to the nearest charging station instead of o
         Config.charging.stations[2].label .. ' (100 m).')
 
     Config.charging.pumpMessage = 'Use a charger.'
-    pedPos = { x = at.x + 2500.0, y = at.y, z = at.z }
+    -- Out at sea south of the port: every station is kilometres away.
+    pedPos = { x = 0.0, y = -5000.0, z = 0.0 }
+    local nearest, distance = Fuel.nearestCharger(pedPos)
     notices = {}
     openMenu()
-    harness.assertTrue(notices[1].message:find('Use a charger. Nearest: ', 1, true) ~= nil)
-    harness.assertTrue(notices[1].message:find('2.5 km', 1, true) ~= nil)
+    harness.assertTrue(notices[1].message:find('Use a charger. Nearest: ' .. nearest.label, 1, true) ~= nil)
+    harness.assertTrue(notices[1].message:find(('(%.1f km)'):format(distance / 1000.0), 1, true) ~= nil)
     Config.charging.pumpMessage = 'Electric vehicles cannot use petrol pumps. Use an EV charging station.'
 
     notices, model = {}, 'adder'
@@ -182,15 +194,18 @@ harness.test('charging stations refuse petrol vehicles and far-away players', fu
     standAtCharger()
 end)
 
-harness.test('every charging station gets one target zone with its own or the default radius', function()
+harness.test('every charger gets one target zone on the prop with its own or the default radius', function()
     harness.assertEqual(#zones, #Config.charging.stations)
+    local lift = Config.charging.prop.targetHeight
     for i, station in ipairs(Config.charging.stations) do
-        harness.assertEqual(zones[i].coords, station.coords)
+        harness.assertEqual(zones[i].coords.x, station.coords.x)
+        harness.assertEqual(zones[i].coords.y, station.coords.y)
+        harness.assertEqual(zones[i].coords.z, station.coords.z + lift, 'the zone is centred on the prop body')
         harness.assertEqual(zones[i].radius, (station.radius or 0) > 0 and station.radius or Config.charging.zoneRadius)
         harness.assertEqual(zones[i].distance, Config.charging.interactDistance)
     end
     harness.assertEqual(zones[1].options[1].label, 'Charge vehicle')
-    harness.assertEqual(zones[1].drawSprite, true, 'zones show the kora_target world icon by default')
+    harness.assertEqual(zones[1].drawSprite, false, 'no floating world icon: the charger prop marks the spot')
 end)
 
 harness.test('the isElectricVehicle export asks the native with the model hash and falls back to the list', function()
@@ -212,7 +227,7 @@ harness.test('the pump message names whichever station is nearest the player, wh
     model = 'neon'
     for _, station in ipairs(Config.charging.stations) do
         app, notices = nil, {}
-        pedPos = { x = station.coords.x + 30.0, y = station.coords.y, z = station.coords.z }
+        pedPos = { x = station.coords.x + 30.4, y = station.coords.y, z = station.coords.z }
         openMenu()
         harness.assertTrue(notices[1].message:find('Nearest: ' .. station.label .. ' (30 m).', 1, true) ~= nil,
             'pump near ' .. station.label .. ' should name it')
@@ -240,6 +255,49 @@ harness.test('the charge option only shows near an electric vehicle and is memoi
     clock, model = 2800, 'adder'
     harness.assertFalse(canInteract())
     setCache('vehicle', false)
+end)
+
+harness.test('a full battery hides the charge option, so a second aim cannot toast "already full"', function()
+    local canInteract = zones[1].options[1].canInteract
+    model, fuelLevel = 'neon', 100
+    clock = 10000
+    harness.assertFalse(canInteract(), 'nothing to charge')
+    clock = 10200
+    fuelLevel = 95
+    harness.assertFalse(canInteract(), 'memoised for half a second')
+    clock = 10600
+    harness.assertTrue(canInteract(), 'room for charge shows the option again')
+    fuelLevel = 60
+end)
+
+harness.test('EV and charger toasts are titled Charging, petrol toasts Fuel', function()
+    model, notices = 'neon', {}
+    standAtCharger()
+    fuelLevel = 100
+    openCharger()
+    harness.assertEqual(notices[1].title, 'Charging')
+    harness.assertEqual(notices[1].message, 'Battery is already fully charged.')
+
+    notices, model = {}, 'adder'
+    openCharger()
+    harness.assertEqual(notices[1].title, 'Charging')
+    openMenu()
+    harness.assertEqual(notices[2].title, 'Fuel')
+    harness.assertEqual(notices[2].message, 'Vehicle is already full.')
+
+    notices, model = {}, 'neon'
+    openMenu()
+    harness.assertEqual(notices[1].title, 'Charging', 'the petrol-pump refusal for an EV')
+    fuelLevel = 60
+
+    notices = {}
+    netEvents['qbfuel:client:serviceResult'](true, 'Vehicle charged for $7.', true)
+    netEvents['qbfuel:client:serviceResult'](false, 'Vehicle is already full.', false)
+    harness.assertEqual(notices[1].title, 'Charging')
+    harness.assertEqual(notices[1].type, 'success')
+    harness.assertEqual(notices[2].title, 'Fuel')
+    harness.assertEqual(notices[2].type, 'error')
+    model = 'adder'
 end)
 
 harness.test('LegacyFuel aliases preserve fractional reads and nil writes without changing native exports', function()

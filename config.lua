@@ -75,8 +75,8 @@ Config.pumpModels = {
 
 -- Service areas are deliberately server-side too: the client may choose an
 -- interaction, but the server will only take payment and fill a vehicle here.
--- The default list is the vanilla map's petrol-station network. EVs can charge
--- at these service points as well, avoiding a map dependency for charger props.
+-- The default list is the vanilla map's petrol-station network. EVs charge at
+-- Config.charging.stations instead unless Config.charging.allowAtPumps is on.
 Config.stations = {
     vector3(49.4187, 2778.793, 58.043), vector3(263.894, 2606.463, 44.983),
     vector3(1039.958, 2671.134, 39.550), vector3(1207.260, 2660.175, 37.899),
@@ -98,7 +98,9 @@ Config.stations = {
 -- `sprite`, `colour`, `scale`, `shortRange` or `label` overrides. Stations
 -- closer together than `mergeRadius` metres (the default list has forecourts
 -- listed twice for each side of a road) share one blip, drawn for the first
--- of them; set it to 0 to draw one blip per entry. Example perStation:
+-- of them; set it to 0 to draw one blip per entry. nearestOnly = true shows a
+-- single blip, for the gas station nearest the player, re-picked as they
+-- travel. Example perStation:
 --   perStation = { [3] = { enabled = false }, [5] = { label = "Airfield Fuel" } }
 Config.blips = {
     enabled = true,
@@ -108,21 +110,29 @@ Config.blips = {
     shortRange = true,
     label = 'Gas Station',
     mergeRadius = 30.0,
+    nearestOnly = false,
     perStation = {},
 }
 
--- Dedicated EV charging stations. Each entry is a spot where an electric
--- vehicle can park and charge: the "Charge vehicle" target option appears when
--- aiming (hold Alt) at a point within `radius` metres of `coords`, and only
--- while an electric vehicle is within Config.vehicleSearchDistance of the
--- player. The server also checks the player is within `serviceRadius` of a
--- station before taking payment, so this list is an authorization boundary.
--- Coordinates are road and car-park positions already used elsewhere on this
--- server (kora_garages parking bays, kora_taxi road stops); `coords` sits about
--- half a metre above the ground. The Legion Square Parking station is centred on
--- the middle of the kora_garages bay row there (radius 8 covers the row). Add,
--- move or remove entries freely; `radius` is optional (0 or omitted uses
--- `zoneRadius`).
+-- EV charging stations at real petrol stations. Each one spawns a charger prop
+-- (Config.charging.prop) on the client while the player is nearby, and the
+-- "Charge vehicle" target sits on that prop: hold Alt and aim at the charger
+-- while an electric vehicle that is not fully charged is within
+-- Config.vehicleSearchDistance of the player (or the player sits in it). The
+-- server also checks the player is within `serviceRadius` of a station before
+-- taking payment, so this list is an authorization boundary.
+--
+-- Station fields: `label` (map and message name), `coords` (the ground point
+-- the charger stands on), `heading` (degrees), optional `offset` (world-space
+-- metres added to coords, to nudge a charger without retyping it), optional
+-- `radius` (target zone radius around the prop; 0 uses `zoneRadius`) and
+-- optional `hideModel` (a world prop at `coords` that is hidden while the
+-- charger is spawned, so the two never overlap).
+--
+-- The defaults stand exactly where GTA places the forecourt air pump
+-- (prop_gas_airunit01) at each station, with its heading, so every charger is
+-- on the station's own ground, clear of buildings and reachable by car. That
+-- air pump is hidden while the charger is shown.
 Config.charging = {
     -- Master switch. When false (or when no stations are listed) there is no
     -- charging network and petrol pumps keep servicing EVs as before.
@@ -138,28 +148,47 @@ Config.charging = {
     secondsPerPercent = 0.25,
     -- Server-side range (metres) from a station within which charging is paid.
     serviceRadius = 15.0,
-    -- Default target zone radius and the maximum aim distance (metres).
-    zoneRadius = 4.0,
+    -- Default target zone radius around the charger prop and the maximum aim
+    -- distance (metres).
+    zoneRadius = 1.25,
     interactDistance = 5.0,
-    -- Optional charger prop models (custom map assets) that also offer the
-    -- charge option within a station's service radius. Empty by default: GTA V
-    -- has no vanilla EV charger prop, so the default stations are zone-only.
+    -- The charger prop spawned at every station. It is a local entity created
+    -- through kora_lib when the player comes within `spawnDistance` metres and
+    -- deleted again when they leave or the resource stops. GTA V has no
+    -- vanilla EV charger, so the default model is the free-standing
+    -- pay-and-display machine; set `model` to a streamed charger prop to use a
+    -- real one. `headingOffset` turns every charger (for models whose front is
+    -- not their +Y axis), `snapToGround` settles the prop onto the ground
+    -- after spawning, and the target zone sits `targetHeight` metres above
+    -- the station coords. enabled = false keeps stations target-zone only.
+    prop = {
+        enabled = true,
+        model = 'prop_parkingpay',
+        headingOffset = 0.0,
+        spawnDistance = 75.0,
+        snapToGround = true,
+        targetHeight = 1.0,
+    },
+    -- Optional extra charger prop models (custom map assets) that also offer
+    -- the charge option within a station's service radius.
     propModels = {},
-    -- Draw kora_target's world icon at every station while the player is within
-    -- Config.target.sprites.drawDistance, so the spot is visible before aiming.
-    -- It is a display hint only; the interaction itself is unchanged.
-    worldIcon = true,
+    -- Draw kora_target's world icon (the floating square) at each station.
+    -- Off by default: the charger prop marks the spot.
+    worldIcon = false,
     stations = {
-        { label = 'Legion Square Parking', coords = vector3(211.37, -789.13, 30.4), radius = 8.0 },
-        { label = 'Alta Street Parking', coords = vector3(270.94, -322.96, 44.4), radius = 4.0 },
-        { label = 'Sandy Shores Parking', coords = vector3(1735.0, 3714.3, 34.6), radius = 4.0 },
-        { label = 'Rockford Plaza', coords = vector3(-586.48, -255.96, 36.4), radius = 5.0 },
-        { label = 'Vespucci Canals', coords = vector3(-1184.3, -1304.16, 5.7), radius = 5.0 },
-        { label = 'Del Perro Pier', coords = vector3(-1613.99, -1015.82, 13.6), radius = 5.0 },
-        { label = 'Los Santos Airport', coords = vector3(-1053.23, -2716.2, 14.2), radius = 5.0 },
-        { label = 'Chumash Plaza', coords = vector3(-3232.7, 1013.16, 12.6), radius = 5.0 },
-        { label = 'Grapeseed Main Street', coords = vector3(1662.55, 4876.71, 42.5), radius = 5.0 },
-        { label = 'Paleto Bay', coords = vector3(-9.51, 6529.67, 31.9), radius = 5.0 },
+        { label = 'Murrieta Heights', coords = vector3(1194.54, -1391.44, 34.40), heading = 90.0, hideModel = 'prop_gas_airunit01' },
+        { label = 'La Puerta', coords = vector3(-334.59, -1455.46, 29.54), heading = 0.0, hideModel = 'prop_gas_airunit01' },
+        { label = 'Little Seoul', coords = vector3(-727.31, -906.89, 18.05), heading = 0.0, hideModel = 'prop_gas_airunit01' },
+        { label = 'Little Seoul South', coords = vector3(-546.88, -1221.65, 17.31), heading = 65.0, hideModel = 'prop_gas_airunit01' },
+        { label = 'Elysian Island', coords = vector3(-60.77, -2536.23, 5.19), heading = 235.0, hideModel = 'prop_gas_airunit01' },
+        { label = 'Pacific Bluffs', coords = vector3(-2078.15, -298.24, 12.29), heading = 354.0, hideModel = 'prop_gas_airunit01' },
+        { label = 'Downtown Vinewood', coords = vector3(625.68, 247.43, 102.06), heading = 150.0, hideModel = 'prop_gas_airunit01' },
+        { label = 'Tataviam Mountains', coords = vector3(2555.33, 347.47, 107.65), heading = 0.0, hideModel = 'prop_gas_airunit01' },
+        { label = 'Route 68 West', coords = vector3(62.59, 2788.68, 56.92), heading = 53.0, hideModel = 'prop_gas_airunit01' },
+        { label = 'Route 68 East', coords = vector3(1017.87, 2654.75, 38.74), heading = 90.7, hideModel = 'prop_gas_airunit01' },
+        { label = 'Senora Freeway', coords = vector3(2691.46, 3267.82, 54.28), heading = 239.6, hideModel = 'prop_gas_airunit01' },
+        { label = 'Grapeseed', coords = vector3(1697.68, 4918.80, 41.11), heading = 325.5, hideModel = 'prop_gas_airunit01' },
+        { label = 'Paleto Bay', coords = vector3(-91.02, 6391.60, 30.68), heading = 225.3, hideModel = 'prop_gas_airunit01' },
     },
     -- Map blips, one per station, created through Kora.blips so players can
     -- also hide them with /blips. `sprite` and `colour` are GTA blip ids
@@ -168,7 +197,8 @@ Config.charging = {
     -- Kora.blips pause-map category. shortRange = true (default) shows a blip on the
     -- minimap only when in range, like fuel station blips (it always shows on
     -- the pause map); set it to false to keep them on the minimap at any
-    -- distance.
+    -- distance. nearestOnly = true shows a single blip, for the station
+    -- nearest the player, re-picked as they travel.
     blips = {
         enabled = true,
         sprite = 354,
@@ -178,6 +208,7 @@ Config.charging = {
         label = 'EV Charging Station',
         showStationName = true,
         category = 'Fuel',
+        nearestOnly = false,
     },
 }
 
@@ -310,6 +341,10 @@ if Kora and Kora.config and Kora.config.adopt then
         label = 'Show gas station blips',
         description = 'Shows a map blip at every coordinate in the fuel station list. Turn this off if another resource already draws fuel station blips.',
     })
+    Config.blips.nearestOnly = Kora.config.boolean(Config.blips.nearestOnly, {
+        label = 'Show only the nearest gas station blip',
+        description = 'Shows a single gas station blip, for the station nearest the player, instead of one for every station. The blip moves to the new nearest station as the player travels.',
+    })
     Config.blips.mergeRadius = Kora.config.number(Config.blips.mergeRadius, {
         min = 0.0,
         step = 1.0,
@@ -375,29 +410,66 @@ if Kora and Kora.config and Kora.config.adopt then
     })
     Config.charging.zoneRadius = Kora.config.number(Config.charging.zoneRadius, {
         min = 0.5,
-        step = 0.5,
-        label = 'Default charging zone radius',
-        description = 'Sets the radius in metres of a charging station’s target zone when the station does not set its own. Players aim at a point inside this sphere to see the charge option.',
+        step = 0.25,
+        label = 'Default charger target radius',
+        description = 'Sets the radius in metres of the target zone around a charging station’s charger when the station does not set its own. Players aim at a point inside this sphere to see the charge option.',
     })
     Config.charging.interactDistance = Kora.config.number(Config.charging.interactDistance, {
         min = 0.5,
         step = 0.5,
         label = 'Charging station interaction distance',
-        description = 'Sets how close in metres the player must be to the aimed point for the charge option to appear.',
+        description = 'Sets how close in metres the player must be to the charger for the charge option to appear.',
     })
+    Config.charging.prop = Kora.config.object({
+        enabled = Kora.config.boolean(Config.charging.prop.enabled, {
+            label = 'Spawn charger props',
+            description = 'Spawns a charger prop at every charging station while the player is nearby. Turn this off to keep stations as target zones only.',
+        }),
+        model = Kora.config.string(Config.charging.prop.model, {
+            minLength = 1,
+            label = 'Charger prop model',
+            description = 'Sets the prop model spawned at each charging station. GTA V has no vanilla EV charger, so the default is the pay-and-display machine; use a streamed charger model name for a real charger.',
+        }),
+        headingOffset = Kora.config.number(Config.charging.prop.headingOffset, {
+            min = -360.0,
+            max = 360.0,
+            step = 1.0,
+            label = 'Charger prop heading offset',
+            description = 'Adds this many degrees to every station heading, for charger models whose front does not face the station heading.',
+        }),
+        spawnDistance = Kora.config.number(Config.charging.prop.spawnDistance, {
+            min = 10.0,
+            step = 5.0,
+            label = 'Charger prop spawn distance',
+            description = 'Sets how close in metres the player must be to a charging station before its charger prop is spawned. The prop is deleted again when the player moves further away.',
+        }),
+        snapToGround = Kora.config.boolean(Config.charging.prop.snapToGround, {
+            label = 'Snap charger props to the ground',
+            description = 'Settles each charger prop onto the ground after it spawns, so a station whose height is slightly off still stands on the ground.',
+        }),
+        targetHeight = Kora.config.number(Config.charging.prop.targetHeight, {
+            min = 0.0,
+            step = 0.1,
+            label = 'Charger target height',
+            description = 'Sets how many metres above the station coordinates the charge target zone is centred, normally around the middle of the charger prop.',
+        }),
+    }, { advanced = true })
     Config.charging.propModels = Kora.config.list(Config.charging.propModels,
         Kora.config.string('', { minLength = 1 }), {
-            label = 'Charger prop models',
-            description = 'Lists optional world prop model names, such as custom map EV chargers, that offer the charge option when they are inside a charging station’s service radius. Leave empty to use the station target zones only.',
+            label = 'Extra charger prop models',
+            description = 'Lists optional world prop model names, such as custom map EV chargers, that also offer the charge option when they are inside a charging station’s service radius.',
         })
     Config.charging.stations = Kora.config.list(Config.charging.stations,
         Kora.config.object({
             label = Kora.config.string('Charging station', { minLength = 1 }),
             coords = Kora.config.vector3(vector3(0.0, 0.0, 0.0)),
-            radius = Kora.config.number(0.0, { min = 0.0, step = 0.5 }),
+            heading = Kora.config.number(0.0, { min = -360.0, max = 360.0, step = 0.5 }),
+            offset = Kora.config.optional(nil, Kora.config.vector3(vector3(0.0, 0.0, 0.0))),
+            radius = Kora.config.optional(nil, Kora.config.number(0.0, { min = 0.0, step = 0.25 })),
+            hideModel = Kora.config.optional(nil, Kora.config.string('')),
         }), {
             label = 'EV charging stations',
-            description = 'Lists the charging stations: a name shown on the map and in messages, the world position about half a metre above the ground, and an optional target zone radius in metres (0 uses the default zone radius). The server only takes payment for charging near these positions.',
+            description = 'Lists the charging stations: a name shown on the map and in messages, the ground position and heading of the charger, an optional world-space offset in metres, an optional target radius (0 uses the default) and an optional world prop model to hide where the charger stands. The server only takes payment for charging near these positions.',
         })
     Config.charging.blips.enabled = Kora.config.boolean(Config.charging.blips.enabled, {
         label = 'Show charging station blips',
@@ -415,7 +487,7 @@ if Kora and Kora.config and Kora.config.adopt then
     })
     Config.charging.blips.showStationName = Kora.config.boolean(Config.charging.blips.showStationName, {
         label = 'Name charging stations on the map',
-        description = 'Adds the station name, such as Legion Square Parking, after the blip label in the pause-map legend. Turn this off to show only the blip label.',
+        description = 'Adds the station name, such as Little Seoul, after the blip label in the pause-map legend. Turn this off to show only the blip label.',
     })
     Config.charging.blips.category = Kora.config.string(Config.charging.blips.category, {
         minLength = 1,
@@ -425,7 +497,11 @@ if Kora and Kora.config and Kora.config.adopt then
     })
     Config.charging.worldIcon = Kora.config.boolean(Config.charging.worldIcon, {
         label = 'Show world icon at charging stations',
-        description = 'Draws the kora_target interaction icon at each charging station when the player is nearby, so the spot is visible before aiming at it. The interaction works the same with it off.',
+        description = 'Draws the kora_target interaction icon at each charger when the player is nearby. Off by default because the charger prop marks the spot; the interaction works the same either way.',
+    })
+    Config.charging.blips.nearestOnly = Kora.config.boolean(Config.charging.blips.nearestOnly, {
+        label = 'Show only the nearest charging station blip',
+        description = 'Shows a single charging station blip, for the station nearest the player, instead of one for every station. The blip moves to the new nearest station as the player travels.',
     })
     Config.charging.blips.scale = Kora.config.number(Config.charging.blips.scale, {
         min = 0.1,

@@ -97,6 +97,33 @@ harness.test('default charging stations are labelled, unique and carry usable co
     end
 end)
 
+harness.test('default chargers carry a heading and replace the forecourt air pump', function()
+    for _, station in ipairs(Config.charging.stations) do
+        harness.assertTrue(type(station.heading) == 'number', station.label .. ' needs a heading')
+        harness.assertEqual(station.hideModel, 'prop_gas_airunit01', station.label .. ' stands where the air pump was')
+        harness.assertFalse(station.label:find('Parking', 1, true) ~= nil, 'chargers are at petrol stations, not car parks')
+    end
+end)
+
+harness.test('chargerPosition applies the optional world-space offset everywhere', function()
+    local station = { label = 'T', coords = vector3(10.0, 20.0, 30.0) }
+    harness.assertEqual(Fuel.chargerPosition(station), station.coords, 'no offset keeps the coords')
+    station.offset = vector3(0.0, 0.0, 0.0)
+    harness.assertEqual(Fuel.chargerPosition(station), station.coords)
+    station.offset = vector3(1.5, -2.0, 0.25)
+    local at = Fuel.chargerPosition(station)
+    harness.assertEqual(at.x, 11.5)
+    harness.assertEqual(at.y, 18.0)
+    harness.assertEqual(at.z, 30.25)
+
+    local saved = Config.charging.stations
+    Config.charging.stations = { station }
+    local found, distance = Fuel.nearestCharger({ x = 11.5, y = 18.0, z = 30.25 }, 0.1)
+    harness.assertEqual(found, station, 'nearestCharger measures from the offset position')
+    harness.assertEqual(distance, 0.0)
+    Config.charging.stations = saved
+end)
+
 harness.test('nearestCharger honours the maximum distance', function()
     local first = Config.charging.stations[1]
     local at = { x = first.coords.x + 3.0, y = first.coords.y, z = first.coords.z }

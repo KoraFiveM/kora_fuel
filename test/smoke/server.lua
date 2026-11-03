@@ -180,9 +180,15 @@ harness.test('a charging-station request must be made at a charging station', fu
     atStation, atCharger = true, false
     purchase('cash', 20, 80, 'charger')
     refused('Move closer to the service point and vehicle.')
+    -- Chargers stand on petrol forecourts, so a pump request made there is in
+    -- range but still refused for an EV.
     atCharger = true
     purchase('cash', 20, 80, 'pump')
+    refused('Electric vehicles must use a charging station.')
+    atStation, atCharger = false, false
+    purchase('cash', 20, 80, 'pump')
     refused('Move closer to the service point and vehicle.')
+    atStation, atCharger = true, true
 end)
 
 harness.test('a vehicle the server does not list as electric is billed as petrol at a charger', function()

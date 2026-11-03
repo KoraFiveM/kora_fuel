@@ -1,5 +1,11 @@
-local function notify(message, kind)
-    Kora.notify.send({ title = 'Fuel', message = message, type = kind or 'info' })
+-- Toasts about an electric vehicle or a charging station are titled
+-- 'Charging', everything else 'Fuel' (locales/en.lua).
+local function notify(message, kind, electric)
+    Kora.notify.send({
+        title = Kora.lang(electric and 'title.charging' or 'title.fuel'),
+        message = message,
+        type = kind or 'info',
+    })
 end
 
 -- GetIsVehicleElectric is missing on older game builds, so every call is
@@ -91,17 +97,17 @@ local function closestServiceVehicle(site)
     local pedCoords = GetEntityCoords(PlayerPedId())
     if site == 'charger' then
         if not Fuel.nearestCharger(pedCoords, Config.charging.serviceRadius) then
-            notify('Move to an EV charging station first.', 'error')
+            notify(Kora.lang('error.move_to_charger'), 'error', true)
             return nil
         end
     elseif not nearServicePoint(pedCoords) then
-        notify('Move to a fuel station or charging point first.', 'error')
+        notify(Kora.lang('error.move_to_station'), 'error')
         return nil
     end
 
     local closest = Kora.closest.vehicle(pedCoords, Config.vehicleSearchDistance)
     if not closest.id or not DoesEntityExist(closest.id) then
-        notify('Park a vehicle next to the pump or charger.', 'error')
+        notify(Kora.lang('error.no_vehicle'), 'error', site == 'charger')
         return nil
     end
     return closest.id, pedCoords
@@ -238,18 +244,20 @@ local function openServiceMenu(site)
 
     local electric = isElectricVehicle(vehicle)
     if site == 'pump' and electric and not Fuel.pumpsAcceptElectric() then
-        return notify(pumpRefusal(pedCoords), 'info')
+        return notify(pumpRefusal(pedCoords), 'info', true)
     end
     if site == 'charger' and not electric then
-        return notify('Charging stations are for electric vehicles only.', 'error')
+        return notify(Kora.lang('error.charger_ev_only'), 'error', true)
     end
     if GetIsVehicleEngineRunning(vehicle) then
-        return notify('Switch the engine off before servicing the vehicle.', 'error')
+        return notify(Kora.lang('error.engine_running'), 'error', electric)
     end
 
     local level = currentLevel(vehicle)
     local capacity = math.floor(Config.maxLevel) - level
-    if capacity < 1 then return notify('Vehicle is already full.', 'info') end
+    if capacity < 1 then
+        return notify(Kora.lang(electric and 'info.battery_full' or 'info.tank_full'), 'info', electric)
+    end
 
     -- Price kind follows the server-side model list so the quote matches the charge.
     local kind = Fuel.isElectricModel(GetEntityModel(vehicle)) and 'charge' or 'fuel'
@@ -295,7 +303,9 @@ Kora.callback.register('qbfuel:runProgress', function(netId, duration, electric)
         anim = serviceAnimation,
         props = { fuelNozzle },
     })
-    if not completed then notify(label .. ' cancelled.', 'info') end
+    if not completed then
+        notify(Kora.lang(electric and 'info.charge_cancelled' or 'info.refuel_cancelled'), 'info', electric)
+    end
     return completed == true
 end)
 
@@ -306,8 +316,8 @@ RegisterNetEvent('qbfuel:client:fillVehicle', function(netId, quantity)
     SetVehicleFuelLevel(vehicle, Fuel.clampLevel(currentLevel(vehicle) + quantity) + 0.0)
 end)
 
-RegisterNetEvent('qbfuel:client:serviceResult', function(ok, message)
-    notify(message or 'Unable to service that vehicle.', ok and 'success' or 'error')
+RegisterNetEvent('qbfuel:client:serviceResult', function(ok, message, electric)
+    notify(message or Kora.lang('error.service_failed'), ok and 'success' or 'error', electric == true)
 end)
 
 -- Consumption only matters while the local player drives a vehicle, so the
@@ -370,13 +380,17 @@ AddEventHandler('onClientResourceStart', function(resource)
     if resource == 'kora_lib' then watchCache() end
 end)
 
--- EV charging stations. Zones and models only: nothing runs until the player
--- aims at one, and the option check below is memoised so a held aim does not
--- rescan vehicles every resolver tick.
+-- EV charging stations. One target zone per charger (the props themselves are
+-- spawned by client/chargers.lua): nothing runs until the player aims at one,
+-- and the option check below is memoised so a held aim does not rescan
+-- vehicles every resolver tick.
 local CHARGE_CHECK_MS = 500
 local chargeCheck = { at = -CHARGE_CHECK_MS, ready = false }
 
-local function electricVehicleNearby()
+-- The option only shows for an electric vehicle that can still take charge.
+-- A full battery hides it, so aiming at the charger again straight after a
+-- charge offers nothing rather than a menu that can only answer "full".
+local function chargeableVehicleNearby()
     local now = GetGameTimer()
     if now - chargeCheck.at < CHARGE_CHECK_MS then return chargeCheck.ready end
     chargeCheck.at = now
@@ -385,7 +399,8 @@ local function electricVehicleNearby()
     if not vehicle then
         vehicle = Kora.closest.vehicle(GetEntityCoords(playerPed), Config.vehicleSearchDistance).id
     end
-    chargeCheck.ready = vehicle and isElectricVehicle(vehicle) or false
+    chargeCheck.ready = vehicle and isElectricVehicle(vehicle)
+        and currentLevel(vehicle) < math.floor(Config.maxLevel) or false
     return chargeCheck.ready
 end
 
@@ -397,14 +412,16 @@ local function registerChargingStations()
         {
             label = 'Charge vehicle',
             icon = 'Zap',
-            canInteract = electricVehicleNearby,
+            canInteract = chargeableVehicleNearby,
             onSelect = function() openServiceMenu('charger') end,
         },
     }
+    local lift = tonumber(charging.prop and charging.prop.targetHeight) or 1.0
     for _, station in ipairs(charging.stations) do
         local radius = (tonumber(station.radius) or 0.0) > 0.0 and station.radius or charging.zoneRadius
+        local at = Fuel.chargerPosition(station)
         exports.kora_target:addSphereZone({
-            coords = station.coords,
+            coords = vector3(at.x, at.y, at.z + lift),
             radius = radius + 0.0,
             distance = charging.interactDistance + 0.0,
             options = zoneOptions,
@@ -417,7 +434,7 @@ local function registerChargingStations()
             {
                 label = 'Charge vehicle',
                 icon = 'zap',
-                canInteract = electricVehicleNearby,
+                canInteract = chargeableVehicleNearby,
                 action = function() openServiceMenu('charger') end,
             },
         }, charging.interactDistance)

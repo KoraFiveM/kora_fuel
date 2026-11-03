@@ -28,5 +28,10 @@ shared_scripts {
 client_scripts {
     'client/main.lua',
     'client/blips.lua',
+    'client/chargers.lua',
+}
+
+files {
+    'locales/*.lua',
 }
 server_script 'server/main.lua'

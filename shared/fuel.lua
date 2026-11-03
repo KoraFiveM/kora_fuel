@@ -60,6 +60,18 @@ function Fuel.isPaymentAccount(account)
     return false
 end
 
+---Where a charging station's charger stands: its ground `coords` plus the
+---optional world-space `offset` in metres.
+---@param station table a Config.charging.stations entry
+---@return table|vector3 position
+function Fuel.chargerPosition(station)
+    local at, offset = station.coords, station.offset
+    if type(offset) ~= 'table' and type(offset) ~= 'vector3' then return at end
+    local dx, dy, dz = tonumber(offset.x) or 0.0, tonumber(offset.y) or 0.0, tonumber(offset.z) or 0.0
+    if dx == 0.0 and dy == 0.0 and dz == 0.0 then return at end
+    return vector3(at.x + dx, at.y + dy, at.z + dz)
+end
+
 ---@param coords table|vector3 anything with x/y/z
 ---@param maxDistance? number only stations within this many metres count
 ---@return table|nil station nearest charging station
@@ -69,7 +81,7 @@ function Fuel.nearestCharger(coords, maxDistance)
     if not charging or not coords then return nil end
     local best, bestDistance
     for _, station in ipairs(charging.stations or {}) do
-        local at = station.coords
+        local at = Fuel.chargerPosition(station)
         local dx, dy, dz = coords.x - at.x, coords.y - at.y, coords.z - at.z
         local distance = math.sqrt(dx * dx + dy * dy + dz * dz)
         if not bestDistance or distance < bestDistance then best, bestDistance = station, distance end
