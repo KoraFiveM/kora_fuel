@@ -21,6 +21,7 @@ dependency 'kora_target'
 shared_script '@kora_lib/init.lua'
 
 shared_scripts {
+    'shared/stations.lua',
     'config.lua',
     'shared/fuel.lua',
 }

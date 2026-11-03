@@ -86,6 +86,7 @@ end
 
 Kora.compat = dofile(repoRoot .. '../kora_lib/compat/provider.lua')()
 
+dofile(repoRoot .. 'shared/stations.lua')
 dofile(repoRoot .. 'config.lua')
 dofile(repoRoot .. 'shared/fuel.lua')
 dofile(repoRoot .. 'client/main.lua')

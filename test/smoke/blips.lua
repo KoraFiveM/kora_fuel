@@ -47,6 +47,7 @@ local function count()
     return n
 end
 
+dofile(repoRoot .. "shared/stations.lua")
 dofile(repoRoot .. "config.lua")
 dofile(repoRoot .. "shared/fuel.lua")
 dofile(repoRoot .. "client/blips.lua")

@@ -12,6 +12,7 @@ _G.joaat = function(model)
     return hash
 end
 
+dofile(repoRoot .. 'shared/stations.lua')
 dofile(repoRoot .. 'config.lua')
 dofile(repoRoot .. 'shared/fuel.lua')
 

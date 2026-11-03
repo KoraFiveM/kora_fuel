@@ -51,6 +51,14 @@ Station fields: `label`, `coords` (the ground point the charger stands on),
 (target radius around the charger, default `zoneRadius`) and `hideModel` (a world
 prop at `coords` to hide while the charger is spawned).
 
+`coords` and `offset` accept `vector3(x, y, z)`, `vec3(x, y, z)`, `{ x = , y = , z = }`
+and `{ x, y, z }`; all are turned into a `vector3` (`shared/stations.lua`), including
+saved overrides and the client snapshot, where vectors arrive as plain tables. Each
+station is validated on its own: one with a bad field is skipped with a single
+console warning such as
+`[kora_fuel] Skipping EV charging station #3 "Paleto Bay": offset must be ...`, and
+the other stations and the rest of the config still load.
+
 ### Charger props
 
 Every station gets a charger prop (`Config.charging.prop`). It is a local,
@@ -132,4 +140,4 @@ so there is no polling thread and walking around a forecourt does no work.
 
 ## Tests
 
-`test/run.sh` runs the shared, client, blips, chargers and server smoke tests with plain Lua.
+`test/run.sh` runs the shared, client, blips, chargers, stations and server smoke tests with plain Lua.

@@ -67,6 +67,7 @@ _G.GetEntityRoutingBucket = function() return 0 end
 _G.GetIsVehicleEngineRunning = function() return false end
 _G.GetEntityModel = function() return joaat(model) end
 
+dofile(repoRoot .. 'shared/stations.lua')
 dofile(repoRoot .. 'config.lua')
 dofile(repoRoot .. 'shared/fuel.lua')
 dofile(repoRoot .. 'server/main.lua')

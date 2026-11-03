@@ -127,7 +127,11 @@ Config.blips = {
 -- metres added to coords, to nudge a charger without retyping it), optional
 -- `radius` (target zone radius around the prop; 0 uses `zoneRadius`) and
 -- optional `hideModel` (a world prop at `coords` that is hidden while the
--- charger is spawned, so the two never overlap).
+-- charger is spawned, so the two never overlap). `coords` and `offset` may be
+-- written as vector3(x, y, z), vec3(x, y, z), { x = , y = , z = } or
+-- { x, y, z }. Each station is checked on its own (shared/stations.lua): one
+-- with a bad field is skipped with a console warning naming it, and the rest
+-- still load.
 --
 -- The defaults stand exactly where GTA places the forecourt air pump
 -- (prop_gas_airunit01) at each station, with its heading, so every charger is
@@ -211,6 +215,11 @@ Config.charging = {
         nearestOnly = false,
     },
 }
+
+-- Before kora_lib's schema sees the list: every coords/offset becomes a vector3
+-- and an invalid station is dropped with one warning, so it cannot fail the
+-- whole resource config.
+Config.charging.stations = Fuel.normalizeChargingStations(Config.charging.stations)
 
 -- Registers this resource-owned configuration with kora_lib without changing its public Config table.
 if Kora and Kora.config and Kora.config.adopt then
@@ -469,7 +478,7 @@ if Kora and Kora.config and Kora.config.adopt then
             hideModel = Kora.config.optional(nil, Kora.config.string('')),
         }), {
             label = 'EV charging stations',
-            description = 'Lists the charging stations: a name shown on the map and in messages, the ground position and heading of the charger, an optional world-space offset in metres, an optional target radius (0 uses the default) and an optional world prop model to hide where the charger stands. The server only takes payment for charging near these positions.',
+            description = 'Lists the charging stations: a name shown on the map and in messages, the ground position and heading of the charger, an optional world-space offset in metres, an optional target radius (0 uses the default) and an optional world prop model to hide where the charger stands. The server only takes payment for charging near these positions. A station with an invalid field is skipped with a console warning; the others still load.',
         })
     Config.charging.blips.enabled = Kora.config.boolean(Config.charging.blips.enabled, {
         label = 'Show charging station blips',
@@ -519,4 +528,13 @@ if Kora and Kora.config and Kora.config.adopt then
         description = 'Sets the text shown for charging station blips on the map legend.',
     })
     Config = Kora.config.adopt(Config)
+
+    -- Saved overrides and the client's server snapshot can carry vectors as
+    -- plain {x, y, z} tables (JSON/msgpack); clean those the same way.
+    Config.charging.stations = Fuel.normalizeChargingStations(Config.charging.stations)
+    if Kora.config.onChange then
+        Kora.config.onChange('charging.stations', function(stations)
+            Config.charging.stations = Fuel.normalizeChargingStations(stations)
+        end)
+    end
 end
