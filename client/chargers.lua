@@ -50,11 +50,16 @@ local function spawnProp(site, prop)
         site.entity = entity
         -- The player left (or the resource stopped) while the model streamed.
         if stopped or not site.inside then return removeProp(site) end
+        -- Hide the air pump before the ground snap, so the snap cannot settle
+        -- the charger on top of the pump it stands in for. The hide applies on
+        -- the next frame, and the player may leave during it.
+        setWorldModelHidden(site, true)
         if prop.snapToGround then
+            Wait(0)
+            if stopped or site.entity ~= entity then return end
             PlaceObjectOnGroundProperly(entity)
             FreezeEntityPosition(entity, true)
         end
-        setWorldModelHidden(site, true)
     end)
 end
 

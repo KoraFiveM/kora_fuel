@@ -54,7 +54,7 @@ Config.electricVehicles = {
     'cyclone2', 'dilettante', 'dilettante2', 'envisage', 'estride', 'imorgon',
     'inductor', 'inductor2', 'iwagen', 'khamelion', 'neon', 'omnisegt',
     'pipistrello', 'powersurge', 'raiden', 'rcbandito', 'surge', 'suzume',
-    'tezeract', 'virtue', 'vivanite2', 'voltic', 'voltic2', 'xtreme',
+    'tezeract', 'virtue', 'vivanite', 'vivanite2', 'voltic', 'voltic2', 'xtreme',
 }
 
 Config.electric = {

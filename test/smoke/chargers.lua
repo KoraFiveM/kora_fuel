@@ -8,6 +8,7 @@ vector3 = function(x, y, z) return { x = x, y = y, z = z } end
 joaat = function(model) return 'hash:' .. model end
 local threads, stopHandler = {}, nil
 CreateThread = function(fn) threads[#threads + 1] = fn end
+Wait = function() end
 local function runThreads()
     local pending = threads
     threads = {}
@@ -20,7 +21,8 @@ local zones, entities, hides, snapped, nextEntity = {}, {}, {}, {}, 100
 local failModel = false
 CreateModelHideExcludingScriptObjects = function(x, y, z, radius, model) hides[x .. ',' .. y] = model end
 RemoveModelHide = function(x, y) hides[x .. ',' .. y] = nil end
-PlaceObjectOnGroundProperly = function(entity) snapped[entity] = true end
+-- Records whether the air pump was already hidden when the prop was snapped.
+PlaceObjectOnGroundProperly = function(entity) snapped[entity] = next(hides) ~= nil end
 FreezeEntityPosition = function() end
 DoesEntityExist = function(entity) return entities[entity] ~= nil end
 DeleteEntity = function(entity) entities[entity] = nil end
@@ -74,7 +76,7 @@ harness.test('entering spawns the configured prop at the station heading and hid
     harness.assertEqual(entity.coords, first.coords)
     harness.assertEqual(entity.heading, first.heading % 360.0)
     harness.assertTrue(entity.freeze)
-    harness.assertTrue(snapped[nextEntity] == true, 'snapToGround settles the prop')
+    harness.assertTrue(snapped[nextEntity] == true, 'snapToGround settles the prop after the air pump is hidden')
     harness.assertEqual(hides[key], 'hash:prop_gas_airunit01')
 end)
 
