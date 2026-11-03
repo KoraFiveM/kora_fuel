@@ -165,14 +165,16 @@ Config.charging = {
     -- also hide them with /blips. `sprite` and `colour` are GTA blip ids
     -- (354 / 46 by default). The legend entry reads `label`, followed by the
     -- station name when `showStationName` is true. `category` is a fixed
-    -- Kora.blips pause-map category. shortRange = false keeps the blips on the
-    -- minimap at any distance, which helps drivers find the nearest station.
+    -- Kora.blips pause-map category. shortRange = true (default) shows a blip on the
+    -- minimap only when in range, like fuel station blips (it always shows on
+    -- the pause map); set it to false to keep them on the minimap at any
+    -- distance.
     blips = {
         enabled = true,
         sprite = 354,
         colour = 46,
         scale = 0.8,
-        shortRange = false,
+        shortRange = true,
         label = 'EV Charging Station',
         showStationName = true,
         category = 'Fuel',

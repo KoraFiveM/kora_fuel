@@ -67,7 +67,7 @@ harness.test("charging station blips use Config.charging.blips and can be turned
     harness.assertEqual(ev.sprite, 354)
     harness.assertEqual(ev.colour, 46)
     harness.assertEqual(ev.category, "Fuel")
-    harness.assertFalse(ev.shortRange)
+    harness.assertTrue(ev.shortRange)
     harness.assertEqual(ev.colour, Config.charging.blips.colour)
     harness.assertEqual(ev.sprite, Config.charging.blips.sprite)
     harness.assertEqual(ev.x, Config.charging.stations[1].coords.x)

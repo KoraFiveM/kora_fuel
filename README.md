@@ -88,7 +88,7 @@ stations listed, pumps charge EVs exactly as before.
 
 Station blips (`Config.charging.blips`, created through `Kora.blips`, so players can
 hide them with `/blips`): `enabled` (`true`), `sprite` (354), `colour` (46), `scale`
-(0.8), `shortRange` (`false`, so they show on the minimap at any distance), `label`
+(0.8), `shortRange` (`true`: shown on the minimap only when in range, always on the pause map; set `false` to show them on the minimap at any distance), `label`
 ("EV Charging Station"), `showStationName` (`true`: the legend reads "EV Charging
 Station - Legion Square Parking") and `category` (`Fuel`, a fixed kora_lib pause-map
 category). Blips are created for every station and removed when the resource stops.
