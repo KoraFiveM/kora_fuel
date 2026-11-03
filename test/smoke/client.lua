@@ -323,4 +323,36 @@ harness.test('fuel consumption only runs while driving and starts and stops on c
     harness.assertEqual(#threads, 0, 'worker exits when leaving the vehicle')
 end)
 
+harness.test('kora_lib restart re-registers listeners, re-seeds and never duplicates workers', function()
+    for _, key in ipairs({ 'vehicle', 'seat', 'ped' }) do
+        harness.assertEqual(#cacheHandlers[key], 1, 'normal load registers exactly one ' .. key .. ' handler')
+    end
+    harness.assertEqual(#threads, 0)
+    setCache('vehicle', 2); setCache('seat', -1)
+    harness.assertEqual(#threads, 1)
+
+    -- kora_lib restarts: its registrations are gone, the cached values persist.
+    cacheHandlers = {}
+    legacyEvents.onClientResourceStart('other_resource')
+    harness.assertEqual(next(cacheHandlers), nil, 'unrelated resource starts change nothing')
+    legacyEvents.onClientResourceStart('kora_lib')
+    for _, key in ipairs({ 'vehicle', 'seat', 'ped' }) do
+        harness.assertEqual(#cacheHandlers[key], 1, 'restart re-registers one ' .. key .. ' handler')
+    end
+    harness.assertEqual(#threads, 1, 're-seeding while the worker runs must not start another')
+
+    -- Worker ends, then kora_lib restarts while the player is still driving: seeding restarts it.
+    setCache('vehicle', false); setCache('seat', false)
+    advance(); advance()
+    harness.assertEqual(#threads, 0)
+    cacheState.vehicle, cacheState.seat = 2, -1
+    cacheHandlers = {}
+    legacyEvents.onClientResourceStart('kora_lib')
+    harness.assertEqual(#threads, 1, 'seeding from the current cache starts the worker')
+    setCache('seat', false)
+    advance(); advance()
+    harness.assertEqual(#threads, 0)
+    setCache('vehicle', false)
+end)
+
 harness.report('qbfuel client')

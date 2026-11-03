@@ -26,12 +26,8 @@ local function isElectricVehicle(vehicle)
     return Fuel.isElectricModel(GetEntityModel(vehicle)) or isNativeElectric(vehicle)
 end
 
--- Resolve the native once when the player gets in, so the HUD's first sample
--- and the pump menu never pay for it.
-Kora.cache.onChange('vehicle', function(vehicle)
-    if vehicle and vehicle ~= 0 and DoesEntityExist(vehicle) then isNativeElectric(vehicle) end
-end)
-
+-- The native is resolved once when the player gets in (vehicle listener in
+-- watchCache), so the HUD's first sample and the pump menu never pay for it.
 exports('isElectricVehicle', isElectricVehicle)
 
 -- Display/service level: whole numbers only.
@@ -317,7 +313,7 @@ end)
 -- Consumption only matters while the local player drives a vehicle, so the
 -- worker starts when the cached vehicle/seat make that true and exits as soon
 -- as they stop doing so. On foot (or as a passenger) nothing runs at all.
-local drivenVehicle, drivenSeat = Kora.cache.vehicle(), Kora.cache.seat()
+local drivenVehicle, drivenSeat
 local consuming = false
 
 local function consumeTick(vehicle)
@@ -347,24 +343,36 @@ local function startConsuming()
     end)
 end
 
-Kora.cache.onChange('vehicle', function(vehicle)
-    drivenVehicle = vehicle
-    startConsuming()
-end)
+-- kora_lib drops onChange listeners when it restarts, so every listener lives
+-- in watchCache(): it runs at load and again on each kora_lib restart, and
+-- re-seeds from the current values (onChange never reports them). The
+-- `consuming` flag keeps a re-seed from ever starting a second worker.
+local playerPed
 
-Kora.cache.onChange('seat', function(seat)
-    drivenSeat = seat
-    startConsuming()
-end)
+local function watchCache()
+    Kora.cache.onChange('vehicle', function(vehicle)
+        drivenVehicle = vehicle
+        if vehicle and vehicle ~= 0 and DoesEntityExist(vehicle) then isNativeElectric(vehicle) end
+        startConsuming()
+    end)
+    Kora.cache.onChange('seat', function(seat)
+        drivenSeat = seat
+        startConsuming()
+    end)
+    Kora.cache.onChange('ped', function(ped) playerPed = ped end)
 
-startConsuming()
+    drivenVehicle, drivenSeat, playerPed = Kora.cache.vehicle(), Kora.cache.seat(), Kora.cache.ped()
+    startConsuming()
+end
+
+watchCache()
+AddEventHandler('onClientResourceStart', function(resource)
+    if resource == 'kora_lib' then watchCache() end
+end)
 
 -- EV charging stations. Zones and models only: nothing runs until the player
 -- aims at one, and the option check below is memoised so a held aim does not
 -- rescan vehicles every resolver tick.
-local playerPed = Kora.cache.ped()
-Kora.cache.onChange('ped', function(ped) playerPed = ped end)
-
 local CHARGE_CHECK_MS = 500
 local chargeCheck = { at = -CHARGE_CHECK_MS, ready = false }
 
