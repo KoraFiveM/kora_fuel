@@ -191,4 +191,4 @@ harness.test('Grapeseed pumps (prop_gas_pump_old3) are serviceable', function()
     harness.assertTrue(listed)
 end)
 
-harness.report('qbfuel shared')
+harness.report('kora_fuel shared')

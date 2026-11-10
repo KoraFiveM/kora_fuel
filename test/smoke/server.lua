@@ -75,16 +75,16 @@ dofile(repoRoot .. 'server/main.lua')
 local function purchase(account, quantity, level, site)
     payments, pushes, progressCalls = {}, {}, {}
     _G.source = 1
-    events['qbfuel:server:purchase'](7, account or 'cash', quantity or 20, level or 80, site)
+    events['kora_fuel:server:purchase'](7, account or 'cash', quantity or 20, level or 80, site)
 end
 
 harness.test('a completed purchase charges the configured price and fills the requested amount', function()
     purchase()
-    harness.assertEqual(progressCalls[1][2], 'qbfuel:runProgress')
+    harness.assertEqual(progressCalls[1][2], 'kora_fuel:runProgress')
     harness.assertEqual(progressCalls[1][4], 2500)
     harness.assertEqual(#payments, 1)
     harness.assertEqual(payments[1].amount, 40)
-    harness.assertEqual(pushes[1].name, 'qbfuel:client:fillVehicle')
+    harness.assertEqual(pushes[1].name, 'kora_fuel:client:fillVehicle')
     harness.assertEqual(pushes[1].args[1], 7)
     harness.assertEqual(pushes[1].args[2], 20)
     harness.assertTrue(pushes[#pushes].args[1])
@@ -96,7 +96,7 @@ harness.test('a free total fills the vehicle without asking kora_core to remove 
     completed, paymentAccepted = true, true
     purchase()
     harness.assertEqual(#payments, 0)
-    harness.assertEqual(pushes[1].name, 'qbfuel:client:fillVehicle')
+    harness.assertEqual(pushes[1].name, 'kora_fuel:client:fillVehicle')
     harness.assertTrue(pushes[#pushes].args[1])
     Config.pricePerUnit.fuel = saved
 end)
@@ -140,7 +140,7 @@ harness.test('a failed payment never fills the vehicle', function()
     purchase()
     harness.assertEqual(#payments, 1)
     harness.assertEqual(#pushes, 1)
-    harness.assertEqual(pushes[1].name, 'qbfuel:client:serviceResult')
+    harness.assertEqual(pushes[1].name, 'kora_fuel:client:serviceResult')
     harness.assertFalse(pushes[1].args[1])
     paymentAccepted = true
 end)
@@ -222,4 +222,4 @@ harness.test('quantity and funds are still validated at charging stations', func
     balance = 100
 end)
 
-harness.report('qbfuel server')
+harness.report('kora_fuel server')

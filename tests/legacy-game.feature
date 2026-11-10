@@ -91,7 +91,7 @@ Feature: kora_fuel — game tests
     When I get out of the vehicle
     And I manually: hold Alt and aim at the pump
     And I select the "Service nearby vehicle" target option
-    Then the "qbfuel:pump" app opens
+    Then the "kora_fuel:pump" app opens
     And I confirm: the panel is titled "Refuel vehicle" and "Petrol pump"
     And I confirm: it shows a Fuel level bar (e.g. 87 / 100) and "Price per unit $2.00"
     And I confirm: it shows a Total Price for the missing amount and an "Amount to add" slider
@@ -210,7 +210,7 @@ Feature: kora_fuel — game tests
     And I turn the engine off
     And I get out of the vehicle
     And I manually: hold Alt, aim at the pump and pick "Service nearby vehicle"
-    Then the "qbfuel:pump" app opens
+    Then the "kora_fuel:pump" app opens
 
   @kora_fuel @legacy:fuel-no-vehicle @target:2
   Scenario: Pump with no car nearby
@@ -281,7 +281,7 @@ Feature: kora_fuel — game tests
     And the vehicle has 40% fuel
     When I manually: go to a gas station such as Pacific Bluffs (Xero by the beach), Morningwood/Del Perro, Richman Glen, Route 68 near Fort Zancudo or either Paleto Bay station
     And I manually: try "Service nearby vehicle" at the pump with a not-full petrol car
-    Then the "qbfuel:pump" app opens
+    Then the "kora_fuel:pump" app opens
     And I confirm: the refuel menu opens at every station I try
     And I confirm: each station has a Gas Station blip
     And I confirm: I have noted the station name of any "Move to a fuel station or charging point first." message or missing blip
@@ -349,7 +349,7 @@ Feature: kora_fuel — game tests
     And I manually: park by the charger machine
     And I turn the engine off
     And I manually: hold Alt, aim at the machine and pick "Charge vehicle"
-    Then the "qbfuel:pump" app opens
+    Then the "kora_fuel:pump" app opens
     And I confirm: the panel shows "Battery charge - <station>", a Charge level bar, "$1.25 per unit" with "Totals are whole dollars." and a "Charge" button
     When I manually: pay by pressing the Charge button
     Then a progress bar labelled "Charging vehicle" should run
@@ -368,7 +368,7 @@ Feature: kora_fuel — game tests
     Given I am at "ev_charger"
     When I manually: ask a Mod to give me an electric car at 96 charge or lower
     And I manually: open the Charge vehicle menu at the charger
-    Then the "qbfuel:pump" app opens
+    Then the "kora_fuel:pump" app opens
     When I manually: set the slider to 1 unit and read Total Price
     Then I confirm: 1 unit shows $2 with "1 unit ($1.25 rounded up)"
     When I manually: set the slider to 3 units and read Total Price

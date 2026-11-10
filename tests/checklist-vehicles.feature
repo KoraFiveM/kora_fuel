@@ -11,7 +11,7 @@ Feature: kora_fuel — Vehicles
     And my cash balance is at least 500
     And a "test_car" is spawned in front of me
     When I manually: hold Alt, target the pump and choose 'Service nearby vehicle'
-    Then the "qbfuel:pump" app should be open
+    Then the "kora_fuel:pump" app should be open
     When I manually: pick an amount to add and choose to pay with cash or bank
     Then I confirm: the price per unit and the total are shown
     When I manually: press Confirm
@@ -25,7 +25,7 @@ Feature: kora_fuel — Vehicles
     And my cash balance is at least 500
     And a "test_car" is spawned in front of me
     When I manually: open the pump service panel and pick a small fuel amount
-    Then the "qbfuel:pump" app should be open
+    Then the "kora_fuel:pump" app should be open
     And I confirm: the menu shows the total rounded up to whole dollars
     And I confirm: the menu shows the exact amount it was rounded from
 

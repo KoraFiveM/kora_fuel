@@ -129,7 +129,7 @@ local function pumpRefusal(coords)
     return message
 end
 
-local appId = 'qbfuel:pump'
+local appId = 'kora_fuel:pump'
 
 local function titleCase(text)
     return (tostring(text):gsub('^%l', string.upper))
@@ -163,7 +163,7 @@ local function onAppAction(actionId, context)
         return { notice = { tone = 'destructive', message = 'Invalid fill amount.' } }
     end
 
-    TriggerServerEvent('qbfuel:server:purchase', data.netId, value.account, quantity, data.level, data.site)
+    TriggerServerEvent('kora_fuel:server:purchase', data.netId, value.account, quantity, data.level, data.site)
     return { close = true }
 end
 
@@ -308,7 +308,7 @@ Kora.interact.addModel(Config.pumpModels, {
     { label = 'Service nearby vehicle', icon = 'fuel', action = function() openServiceMenu('pump') end },
 }, 2.5)
 
-Kora.callback.register('qbfuel:runProgress', function(netId, duration, electric)
+Kora.callback.register('kora_fuel:runProgress', function(netId, duration, electric)
     local vehicle = NetworkGetEntityFromNetworkId(netId)
     if vehicle == 0 or not DoesEntityExist(vehicle) then return false end
     if GetIsVehicleEngineRunning(vehicle) then return false end
@@ -333,14 +333,14 @@ Kora.callback.register('qbfuel:runProgress', function(netId, duration, electric)
     return completed == true
 end)
 
-RegisterNetEvent('qbfuel:client:fillVehicle', function(netId, quantity)
+RegisterNetEvent('kora_fuel:client:fillVehicle', function(netId, quantity)
     if source ~= 65535 then return end
     local vehicle = type(netId) == 'number' and NetworkGetEntityFromNetworkId(netId) or 0
     if vehicle == 0 or not DoesEntityExist(vehicle) or type(quantity) ~= 'number' then return end
     SetVehicleFuelLevel(vehicle, Fuel.clampLevel(currentLevel(vehicle) + quantity) + 0.0)
 end)
 
-RegisterNetEvent('qbfuel:client:serviceResult', function(ok, message, electric)
+RegisterNetEvent('kora_fuel:client:serviceResult', function(ok, message, electric)
     notify(message or Kora.lang('error.service_failed'), ok and 'success' or 'error', electric == true)
 end)
 

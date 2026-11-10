@@ -17,7 +17,7 @@ end
 
 -- `electric` picks the client toast title ('Charging' rather than 'Fuel').
 local function sendResult(src, ok, message, electric)
-    TriggerClientEvent('qbfuel:client:serviceResult', src, ok, message, electric == true)
+    TriggerClientEvent('kora_fuel:client:serviceResult', src, ok, message, electric == true)
 end
 
 local function vehicleFor(src, netId, site)
@@ -71,7 +71,7 @@ local function validate(src, netId, account, quantity, currentLevel, site)
     return { electric = electric, kind = kind, price = price, site = site }
 end
 
-RegisterNetEvent('qbfuel:server:purchase', function(netId, account, quantity, currentLevel, site)
+RegisterNetEvent('kora_fuel:server:purchase', function(netId, account, quantity, currentLevel, site)
     local src = source
     if busy[src] then return end
     busy[src] = true
@@ -82,7 +82,7 @@ RegisterNetEvent('qbfuel:server:purchase', function(netId, account, quantity, cu
         local info, reason = validate(src, netId, account, quantity, currentLevel, site)
         if not info then return sendResult(src, false, reason, atCharger) end
 
-        local completed = Kora.callback.trigger(src, 'qbfuel:runProgress', netId, Fuel.progressDuration(quantity, info.kind, info.site), info.electric)
+        local completed = Kora.callback.trigger(src, 'kora_fuel:runProgress', netId, Fuel.progressDuration(quantity, info.kind, info.site), info.electric)
         if completed ~= true then return end
 
         info, reason = validate(src, netId, account, quantity, currentLevel, site)
@@ -98,13 +98,13 @@ RegisterNetEvent('qbfuel:server:purchase', function(netId, account, quantity, cu
             end
         end
 
-        TriggerClientEvent('qbfuel:client:fillVehicle', src, netId, quantity)
+        TriggerClientEvent('kora_fuel:client:fillVehicle', src, netId, quantity)
         sendResult(src, true, ('Vehicle %s for $%d.'):format(info.electric and 'charged' or 'refuelled', info.price), info.electric)
     end)
 
     busy[src] = nil
     if not ok then
-        print(('[qbfuel] purchase error for %s: %s'):format(src, tostring(err)))
+        print(('[kora_fuel] purchase error for %s: %s'):format(src, tostring(err)))
         sendResult(src, false, 'Payment could not be processed.', site == 'charger')
     end
 end)

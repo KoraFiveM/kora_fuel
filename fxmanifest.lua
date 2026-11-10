@@ -3,8 +3,6 @@ game 'gta5'
 lua54 'yes'
 
 name 'kora_fuel'
--- Keep the legacy resource name resolvable for exports['qbfuel'] callers.
-provide 'qbfuel'
 author 'qbcore2'
 version '1.0.0'
 description 'Vehicle fuel and EV charging for the kora_lib test server'

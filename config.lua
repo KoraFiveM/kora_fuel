@@ -237,7 +237,7 @@ if Kora and Kora.config and Kora.config.adopt then
         max = 100.0,
         step = 1.0,
         label = 'Maximum fuel level',
-        description = 'Sets the full-tank fuel or battery level on GTA’s native 0–100 vehicle fuel scale. Keep this at or below 100 so qbfuel, qbgarages, and the HUD agree on the stored vehicle state.',
+        description = 'Sets the full-tank fuel or battery level on GTA’s native 0–100 vehicle fuel scale. Keep this at or below 100 so kora_fuel, kora_garages, and the HUD agree on the stored vehicle state.',
     })
     Config.serviceRadius = Kora.config.number(Config.serviceRadius, {
         advanced = true,
@@ -285,7 +285,7 @@ if Kora and Kora.config and Kora.config.adopt then
         Kora.config.enum('cash', { options = { 'cash', 'bank', 'crypto' } }), {
             advanced = false,
             label = 'Accepted payment accounts',
-            description = 'Lists the player money accounts accepted for fuel and charging purchases, in display priority order. Every entry must be a supported qbcore account; removing an account prevents players from selecting it at the pump.',
+            description = 'Lists the player money accounts accepted for fuel and charging purchases, in display priority order. Every entry must be a supported kora_core account; removing an account prevents players from selecting it at the pump.',
         })
     Config.pricePerUnit = Kora.config.object({
         fuel = Kora.config.number(Config.pricePerUnit.fuel, {
@@ -339,7 +339,7 @@ if Kora and Kora.config and Kora.config.adopt then
         keyType = 'mixed',
         requiredKeys = { 'default' },
         label = 'Fuel consumption by vehicle class',
-        description = 'Sets the fuel or battery charge consumed each second at the reference speed for every GTA vehicle class. Numeric keys are GTA class IDs; the “default” row is used when a class has no explicit rate. Values must be zero or greater, and changes take effect after qbfuel restarts.',
+        description = 'Sets the fuel or battery charge consumed each second at the reference speed for every GTA vehicle class. Numeric keys are GTA class IDs; the “default” row is used when a class has no explicit rate. Values must be zero or greater, and changes take effect after kora_fuel restarts.',
     })
     Config.electricVehicles = Kora.config.list(Config.electricVehicles,
         Kora.config.string('', { minLength = 1 }), {

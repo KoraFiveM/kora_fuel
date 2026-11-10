@@ -133,7 +133,7 @@ end)
 harness.test('submitting still sends the quantity and account to the existing purchase event', function()
     local result = app.onAction('fuel-submit', { data = openData, value = { quantity = 7, account = 'bank' } })
     harness.assertTrue(result.close)
-    harness.assertEqual(purchase[1], 'qbfuel:server:purchase')
+    harness.assertEqual(purchase[1], 'kora_fuel:server:purchase')
     harness.assertEqual(purchase[2], 12)
     harness.assertEqual(purchase[3], 'bank')
     harness.assertEqual(purchase[4], 7)
@@ -337,8 +337,8 @@ harness.test('EV and charger toasts are titled Charging, petrol toasts Fuel', fu
     fuelLevel = 60
 
     notices = {}
-    netEvents['qbfuel:client:serviceResult'](true, 'Vehicle charged for $7.', true)
-    netEvents['qbfuel:client:serviceResult'](false, 'Vehicle is already full.', false)
+    netEvents['kora_fuel:client:serviceResult'](true, 'Vehicle charged for $7.', true)
+    netEvents['kora_fuel:client:serviceResult'](false, 'Vehicle is already full.', false)
     harness.assertEqual(notices[1].title, 'Charging')
     harness.assertEqual(notices[1].type, 'success')
     harness.assertEqual(notices[2].title, 'Fuel')
@@ -459,4 +459,4 @@ harness.test('kora_lib restart re-registers listeners, re-seeds and never duplic
     setCache('vehicle', false)
 end)
 
-harness.report('qbfuel client')
+harness.report('kora_fuel client')
