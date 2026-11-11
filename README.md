@@ -150,3 +150,5 @@ so there is no polling thread and walking around a forecourt does no work.
 ## Tests
 
 `test/run.sh` runs the shared, client, blips, chargers, stations and server smoke tests with plain Lua.
+
+Full documentation: see [docs/](docs/index.md).
