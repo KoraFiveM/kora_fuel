@@ -1,6 +1,6 @@
 ---
 title: Map blips
-sidebar_position: 4
+sidebar_position: 8
 ---
 
 # Map blips
@@ -35,4 +35,4 @@ Set `Config.blips.nearestOnly` or `Config.charging.blips.nearestOnly` to `true` 
 
 ## Options
 
-See [Configuration](./configuration.md) for the full key list.
+See [Configuration](./api/configuration.md) for the full key list.
