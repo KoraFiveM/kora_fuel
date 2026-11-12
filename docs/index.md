@@ -16,7 +16,7 @@ kora_fuel handles vehicle fuel consumption, refuelling at petrol pumps and charg
 - **Electric vehicle detection**: `Config.electricVehicles` is the authoritative list. On the client, the game native `GetIsVehicleElectric` can also be checked (`Config.electric.useNative`). The `isElectricVehicle` export shares this classification with kora_hud.
 - **Whole-dollar pricing**: totals are rounded up, to the nearest dollar, or down (`Config.priceRounding`). If a total was rounded, the menu shows the exact amount it came from.
 - **Map blips**: gas station blips (stations that are close together are merged) and EV charging station blips. Either set can show only the station nearest the player. See [Map blips](./blips.md).
-- **Legacy compatibility**: provides `LegacyFuel`, `qb-fuel`, `ps-fuel` and `cdn-fuel` `GetFuel`/`SetFuel` exports. See [Compatibility](./compatibility.md).
+- **Legacy compatibility**: provides `LegacyFuel`, `qb-fuel`, `ps-fuel` and `cdn-fuel` `GetFuel`/`SetFuel` exports. See [Legacy export compatibility](./api/compat.md).
 - **Config editor support**: all main options are registered with the kora_lib config schema, so they can be edited in the kora_lib config editor.
 
 ## Requirements
@@ -32,32 +32,20 @@ Optional consumers:
 - [kora_hud](https://github.com/KoraFiveM/kora_hud) reads the `isElectricVehicle` export to show Charge instead of Fuel.
 - [kora_garages](https://github.com/KoraFiveM/kora_garages) saves the native fuel level in `player_vehicles.fuel`.
 
-## Installation
+## Documentation map
 
-1. Put `kora_fuel` in your resources folder.
-2. Start it after its dependencies and before kora_hud:
-
-```cfg
-ensure kora_lib
-ensure kora_core
-ensure kora_target
-ensure kora_fuel
-ensure kora_hud
-```
-
-3. There is no SQL to import and there are no inventory items to add.
-4. Optionally adjust `config.lua` (see [Configuration](./configuration.md)). For example, you can add addon EV spawn names to `Config.electricVehicles`.
-
-## Pages
-
+- [Installation](./installation.md): install steps, manifest, start order and startup behaviour
+- [How to use](./how-to-use.md): purchase flow, consumption, EV charging stations and chargers
+- [Commands](./commands.md): kora_fuel registers no commands
+- [API reference](./api/index.md): exports and configuration reference
+  - [Client exports](./api/client-exports.md): `GetFuel`, `SetFuel`, `isElectricVehicle`
+  - [Legacy export compatibility](./api/compat.md): `LegacyFuel`, `qb-fuel`, `ps-fuel`, `cdn-fuel` aliases
+  - [Configuration](./api/configuration.md): every option in `config.lua`
 - [Refuelling and charging](./refuelling-and-charging.md): player flow, EV charging stations, charger props, pricing and server checks
 - [Fuel consumption](./consumption.md): how fuel drains while driving
 - [Map blips](./blips.md): gas station and charging station blips
-- [Configuration](./configuration.md): every option in `config.lua`
-- [Exports](./exports.md): client exports
 - [Events](./events.md): network events and callbacks (internal)
-- [Compatibility](./compatibility.md): LegacyFuel / qb-fuel / ps-fuel / cdn-fuel aliases
-- [Troubleshooting](./troubleshooting.md)
+- [Troubleshooting](./troubleshooting.md): common problems and fixes
 
 ## Tests
 

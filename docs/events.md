@@ -1,11 +1,11 @@
 ---
 title: Events
-sidebar_position: 7
+sidebar_position: 9
 ---
 
 # Events
 
-kora_fuel has no public events for other resources. All events and callbacks below are **internal** to the service flow and are listed only for reference. Do not trigger them from other resources. To read or change fuel, use the [exports](./exports.md).
+kora_fuel has no public events for other resources. All events and callbacks below are **internal** to the service flow and are listed only for reference. Do not trigger them from other resources. To read or change fuel, use the [exports](./api/client-exports.md).
 
 ## Server events
 

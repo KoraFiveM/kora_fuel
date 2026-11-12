@@ -4,7 +4,9 @@ kora_fuel provides native vehicle fuel consumption, petrol-pump refuelling, EV c
 
 ## Documentation
 
-User-facing documentation lives in `docs/` (Markdown, published via the Kora Docusaurus site, kora_docs_next). Read `docs/index.md` first for an overview of features, configuration, commands, exports, events and database usage.
+Feature and behaviour changes must update the matching docs in the same change.
+
+User-facing documentation lives in `docs/` (Markdown, published via the Kora Docusaurus site, kora_docs_next). Read `docs/index.md` first: it is the hub with the feature overview and a documentation map. Layout: `installation.md` (install steps, manifest, start order), `how-to-use.md` (purchase flow, consumption, charging stations), `commands.md` (kora_fuel registers none), `api/` (`client-exports.md`, `compat.md` for the LegacyFuel/qb-fuel/ps-fuel/cdn-fuel aliases, `configuration.md` for every `config.lua` option), and topic pages (`refuelling-and-charging.md`, `consumption.md`, `blips.md`, `events.md`, `troubleshooting.md`). Update the page that owns the topic.
 
 When you add, change, or remove a feature, config option, command, export, event, item, permission, or database table/column, update the matching page in `docs/` in the same change. Keep docs accurate to the code; do not document behaviour that does not exist.
 
