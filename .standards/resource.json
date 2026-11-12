@@ -1,0 +1,54 @@
+{
+  "resource": "kora_fuel",
+  "standardsRevision": "2026-11-12.1",
+  "realms": {
+    "client": [
+      "client/blips.lua",
+      "client/chargers.lua",
+      "client/main.lua"
+    ],
+    "server": [
+      "server/main.lua"
+    ],
+    "shared": [
+      "config.lua",
+      "locales/en.lua",
+      "shared/fuel.lua",
+      "shared/stations.lua"
+    ],
+    "manifest": [
+      "fxmanifest.lua"
+    ],
+    "test": [
+      "test/harness.lua",
+      "test/smoke/blips.lua",
+      "test/smoke/chargers.lua",
+      "test/smoke/client.lua",
+      "test/smoke/server.lua",
+      "test/smoke/shared.lua",
+      "test/smoke/stations.lua",
+      "tests/qa.lua"
+    ]
+  },
+  "exclude": [
+    ".git/*",
+    ".github/*",
+    ".standards/*",
+    "node_modules/*",
+    "**/node_modules/*",
+    "vendor/*",
+    "**/vendor/*",
+    "web/*",
+    "ui/*",
+    "html/*",
+    "dist/*",
+    "artifacts/*",
+    "runtime/*",
+    "txData/*",
+    "storage/*",
+    "stream/*",
+    "docs/*",
+    "__pycache__/*",
+    "modules/lookup/data/*"
+  ]
+}
