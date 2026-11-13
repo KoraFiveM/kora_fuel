@@ -119,8 +119,8 @@ local function pumpRefusal(coords)
     local message = Config.charging.pumpMessage
     local station, distance = Fuel.nearestCharger(coords)
     if not station then return message end
-    local away = distance >= 1000.0 and ('%.1f km'):format(distance / 1000.0) or ('%d m'):format(math.floor(distance))
-    message = ('%s Nearest: %s (%s).'):format(message, station.label, away)
+    local away = distance >= 1000.0 and Kora.lang('error.kilometre', distance / 1000.0) or Kora.lang('error.metre', math.floor(distance))
+    message = ('%s %s'):format(message, Kora.lang('error.nearest_charger', station.label, away))
     if Config.charging.waypointToNearest then
         local at = Fuel.chargerPosition(station)
         SetNewWaypoint(at.x + 0.0, at.y + 0.0)
@@ -136,17 +136,17 @@ local function titleCase(text)
 end
 
 local function unitCount(quantity)
-    return ('%d %s'):format(quantity, quantity == 1 and 'unit' or 'units')
+    return Kora.lang('menu.unit_count', quantity, Kora.lang(quantity == 1 and 'menu.unit' or 'menu.units'))
 end
 
-local roundingNote = { up = 'rounded up', nearest = 'rounded', down = 'rounded down' }
+local roundingNote = { up = Kora.lang('menu.rounded_up'), nearest = Kora.lang('menu.rounded'), down = Kora.lang('menu.rounded_down') }
 
 -- Payments are whole dollars, so a total that is not exactly units x price
 -- says what it was rounded from: "1 unit ($1.25 rounded up)".
 local function totalDescription(spec, quantity)
     local exact = spec.exactFor(quantity)
     if exact == spec.priceFor(quantity) then return unitCount(quantity) end
-    return ('%s ($%.2f %s)'):format(unitCount(quantity), exact,
+    return Kora.lang('menu.total_detail', unitCount(quantity), exact,
         roundingNote[Config.priceRounding] or roundingNote.up)
 end
 
@@ -160,7 +160,7 @@ local function onAppAction(actionId, context)
 
     local quantity = math.floor(tonumber(value.quantity) or 0)
     if quantity < 1 or quantity > data.capacity then
-        return { notice = { tone = 'destructive', message = 'Invalid fill amount.' } }
+        return { notice = { tone = 'destructive', message = Kora.lang('menu.invalid_fill_amount') } }
     end
 
     TriggerServerEvent('kora_fuel:server:purchase', data.netId, value.account, quantity, data.level, data.site)
@@ -170,15 +170,15 @@ end
 local function buildApp(spec)
     local accountOptions = {}
     for _, account in ipairs(spec.accounts) do
-        accountOptions[#accountOptions + 1] = { value = account, label = titleCase(account) }
+        accountOptions[#accountOptions + 1] = { value = account, label = account == 'cash' and Kora.lang('menu.account_cash') or account == 'bank' and Kora.lang('menu.account_bank') or titleCase(account) }
     end
 
-    local unitLabel = spec.electric and 'charge' or 'fuel'
+    local unitLabel = Kora.lang(spec.electric and 'menu.battery_label' or 'menu.fuel_label')
 
     local definition = {
         id = appId,
         title = spec.title,
-        description = spec.description or (spec.electric and 'Battery charge' or 'Petrol pump'),
+        description = spec.description or Kora.lang(spec.electric and 'menu.battery_charge' or 'menu.petrol_pump'),
         icon = spec.electric and 'Zap' or 'Fuel',
         layout = 'compact',
         placement = 'right',
@@ -194,7 +194,7 @@ local function buildApp(spec)
                             type = 'progress',
                             items = {
                                 {
-                                    label = titleCase(unitLabel) .. ' level',
+                                    label = Kora.lang('menu.level', unitLabel),
                                     value = spec.level,
                                     max = Config.maxLevel,
                                     detail = ('%d / %d'):format(spec.level, math.floor(Config.maxLevel)),
@@ -205,9 +205,9 @@ local function buildApp(spec)
                         {
                             type = 'stats',
                             items = {
-                                { label = 'Price per unit', value = ('$%.2f'):format(spec.unitPrice) },
+                                { label = Kora.lang('menu.price_per_unit'), value = ('$%.2f'):format(spec.unitPrice) },
                                 {
-                                    label = 'Total Price',
+                                    label = Kora.lang('menu.total_price'),
                                     value = ('$%d'):format(spec.priceFor(spec.capacity)),
                                     description = totalDescription(spec, spec.capacity),
                                 },
@@ -216,14 +216,14 @@ local function buildApp(spec)
                         {
                             type = 'form',
                             id = 'fuel-form',
-                            submitLabel = spec.electric and 'Charge' or 'Fill up',
-                            action = { id = 'fuel-submit', label = 'Confirm', closeBeforeAction = true },
+                            submitLabel = Kora.lang(spec.electric and 'menu.charge' or 'menu.fill_up'),
+                            action = { id = 'fuel-submit', label = Kora.lang('menu.confirm'), closeBeforeAction = true },
                             fields = {
                                 {
                                     id = 'quantity',
-                                    label = 'Amount to add',
-                                    description = ('$%.2f per unit, up to %s.%s'):format(spec.unitPrice,
-                                        unitCount(spec.capacity), spec.unitPrice % 1 ~= 0 and ' Totals are whole dollars.' or ''),
+                                    label = Kora.lang('menu.amount_to_add'),
+                                    description = Kora.lang('menu.price_limit', spec.unitPrice,
+                                        unitCount(spec.capacity), spec.unitPrice % 1 ~= 0 and Kora.lang('menu.whole_dollars') or ''),
                                     type = 'range',
                                     min = 1,
                                     max = spec.capacity,
@@ -234,7 +234,7 @@ local function buildApp(spec)
                                 },
                                 {
                                     id = 'account',
-                                    label = 'Pay with',
+                                    label = Kora.lang('menu.pay_with'),
                                     type = 'select',
                                     options = accountOptions,
                                     default = spec.accounts[1],
@@ -287,9 +287,8 @@ local function openServiceMenu(site)
     local netId = NetworkGetNetworkIdFromEntity(vehicle)
 
     Kora.nui.registerApp(buildApp({
-        title = electric and 'Charge vehicle' or 'Refuel vehicle',
-        description = site == 'charger' and ('Battery charge - %s'):format(
-            Fuel.nearestCharger(pedCoords, Config.charging.serviceRadius).label) or nil,
+        title = Kora.lang(electric and 'menu.charge_vehicle' or 'menu.refuel_vehicle'),
+        description = site == 'charger' and Kora.lang('menu.charger_description', Fuel.nearestCharger(pedCoords, Config.charging.serviceRadius).label) or nil,
         electric = electric,
         level = level,
         capacity = capacity,
@@ -305,7 +304,7 @@ local function openServiceMenu(site)
 end
 
 Kora.interact.addModel(Config.pumpModels, {
-    { label = 'Service nearby vehicle', icon = 'fuel', action = function() openServiceMenu('pump') end },
+    { label = Kora.lang('menu.service_nearby'), icon = 'fuel', action = function() openServiceMenu('pump') end },
 }, 2.5)
 
 Kora.callback.register('kora_fuel:runProgress', function(netId, duration, electric)
@@ -318,7 +317,7 @@ Kora.callback.register('kora_fuel:runProgress', function(netId, duration, electr
     Wait(750)
     if not DoesEntityExist(vehicle) or GetIsVehicleEngineRunning(vehicle) then return false end
 
-    local label = electric and 'Charging vehicle' or 'Refuelling vehicle'
+    local label = Kora.lang(electric and 'menu.charging_vehicle' or 'menu.refuelling_vehicle')
     local completed = Kora.progressbar.start({
         label = label,
         duration = duration,
@@ -434,7 +433,7 @@ local function registerChargingStations()
 
     local zoneOptions = {
         {
-            label = 'Charge vehicle',
+            label = Kora.lang('menu.charge_vehicle'),
             icon = 'Zap',
             canInteract = chargeableVehicleNearby,
             onSelect = function() openServiceMenu('charger') end,
@@ -456,7 +455,7 @@ local function registerChargingStations()
     if #charging.propModels > 0 then
         Kora.interact.addModel(charging.propModels, {
             {
-                label = 'Charge vehicle',
+                label = Kora.lang('menu.charge_vehicle'),
                 icon = 'zap',
                 canInteract = chargeableVehicleNearby,
                 action = function() openServiceMenu('charger') end,

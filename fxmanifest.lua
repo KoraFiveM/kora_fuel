@@ -3,7 +3,7 @@ game 'gta5'
 lua54 'yes'
 
 name 'kora_fuel'
-author 'qbcore2'
+author 'Kora'
 version '0.2.1'
 description 'Vehicle fuel and EV charging for the kora_lib test server'
 
@@ -20,7 +20,7 @@ shared_script '@kora_lib/init.lua'
 
 shared_scripts {
     'shared/stations.lua',
-    'config.lua',
+    'shared/config.lua',
     'shared/fuel.lua',
 }
 
