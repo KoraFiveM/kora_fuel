@@ -284,7 +284,7 @@ local function openServiceMenu(site)
 
     -- Price kind follows the server-side model list so the quote matches the charge.
     local kind = Fuel.isElectricModel(GetEntityModel(vehicle)) and 'charge' or 'fuel'
-    local netId = NetworkGetNetworkIdFromEntity(vehicle)
+    local netId = NetworkGetEntityIsNetworked(vehicle) and NetworkGetNetworkIdFromEntity(vehicle) or 0
 
     Kora.nui.registerApp(buildApp({
         title = Kora.lang(electric and 'menu.charge_vehicle' or 'menu.refuel_vehicle'),
