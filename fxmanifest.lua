@@ -4,7 +4,7 @@ lua54 'yes'
 
 name 'kora_fuel'
 author 'Kora'
-version '0.2.1'
+version '0.2.2'
 description 'Vehicle fuel and EV charging for the kora_lib test server'
 
 provide 'LegacyFuel'
