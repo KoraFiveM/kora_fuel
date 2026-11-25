@@ -8,6 +8,7 @@
       "client/main.lua"
     ],
     "server": [
+      "kora_versioncheck.lua",
       "server/main.lua"
     ],
     "shared": [
